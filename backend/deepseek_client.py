@@ -1,0 +1,42 @@
+import os
+import requests
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Cargar .env desde la raíz del proyecto
+env_path = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(dotenv_path=env_path)
+
+API_KEY = os.getenv("DEEPSEEK_API_KEY")
+API_URL = "https://api.deepseek.com/v1/chat/completions"
+
+if not API_KEY:
+    raise ValueError("❌ DEEPSEEK_API_KEY no encontrada en el archivo .env")
+
+def get_response_from_llm(prompt: str) -> str:
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [
+            {"role": "system", "content": "Eres un analista técnico experto en criptomonedas."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 800
+    }
+
+    try:
+        print("[🧠 Prompt enviado a DeepSeek]:", prompt)  # DEBUG
+        response = requests.post(API_URL, json=payload, headers=headers)
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        print("[✅ Respuesta recibida de DeepSeek]")  # DEBUG
+        return content
+
+    except requests.exceptions.RequestException as e:
+        print("[❌] Error al contactar con DeepSeek:", e)
+        return "Error al contactar con el analista técnico."
