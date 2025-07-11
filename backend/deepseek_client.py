@@ -1,5 +1,5 @@
 import os
-import requests
+import httpx
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -13,7 +13,7 @@ API_URL = "https://api.deepseek.com/v1/chat/completions"
 if not API_KEY:
     raise ValueError("❌ DEEPSEEK_API_KEY no encontrada en el archivo .env")
 
-def get_response_from_llm(prompt: str) -> str:
+async def get_response_from_llm(prompt: str) -> str:
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
@@ -29,14 +29,16 @@ def get_response_from_llm(prompt: str) -> str:
         "max_tokens": 800
     }
 
-    try:
-        print("[🧠 Prompt enviado a DeepSeek]:", prompt)  # DEBUG
-        response = requests.post(API_URL, json=payload, headers=headers)
-        response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"]
-        print("[✅ Respuesta recibida de DeepSeek]")  # DEBUG
-        return content
+    print("[🧠 Prompt enviado a DeepSeek]:", prompt)  # DEBUG
 
-    except requests.exceptions.RequestException as e:
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(API_URL, json=payload, headers=headers)
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"]["content"]
+            print("[✅ Respuesta recibida de DeepSeek]")  # DEBUG
+            return content
+
+    except Exception as e:
         print("[❌] Error al contactar con DeepSeek:", e)
-        return "Error al contactar con el analista técnico."
+        return "Error interno al contactar con el analista técnico."

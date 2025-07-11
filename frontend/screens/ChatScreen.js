@@ -1,4 +1,3 @@
-// screens/ChatScreen.js
 import React, { useState } from "react";
 import {
   View,
@@ -7,6 +6,7 @@ import {
   Button,
   ScrollView,
   StyleSheet,
+  Switch,
 } from "react-native";
 import Markdown from "react-native-markdown-display";
 import { getLLMResponse } from "../services/llmService";
@@ -17,6 +17,9 @@ const ChatScreen = ({ route }) => {
   const [prompt, setPrompt] = useState("");
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isProMode, setIsProMode] = useState(false); // 🔁 Lite por defecto
+
+  const mode = isProMode ? "pro" : "lite";
 
   const handleSend = async () => {
     if (!prompt.trim() || !token.trim()) return;
@@ -27,7 +30,7 @@ const ChatScreen = ({ route }) => {
     setLoading(true);
 
     try {
-      const response = await getLLMResponse(prompt, token);
+      const response = await getLLMResponse(prompt, token, mode);
       const botMessage = { sender: "bot", text: response };
       setHistory((prev) => [...prev, botMessage]);
     } catch (err) {
@@ -43,6 +46,18 @@ const ChatScreen = ({ route }) => {
   return (
     <View style={styles.container}>
       <Text style={styles.header}>LLM SignalBot Chat</Text>
+
+      <View style={styles.modeSwitchContainer}>
+        <Text style={styles.modeText}>
+          Modo: {isProMode ? "PRO" : "LITE"}
+        </Text>
+        <Switch
+          value={isProMode}
+          onValueChange={setIsProMode}
+          trackColor={{ false: "#a0a0a0", true: "#81d4fa" }}
+          thumbColor={isProMode ? "#007aff" : "#ccc"}
+        />
+      </View>
 
       <TextInput
         style={styles.tokenInput}
@@ -94,6 +109,16 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "bold",
     marginBottom: 15,
+  },
+  modeSwitchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  modeText: {
+    fontSize: 16,
+    fontWeight: "500",
   },
   tokenInput: {
     borderWidth: 1,
