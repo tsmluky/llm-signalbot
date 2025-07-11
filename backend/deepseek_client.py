@@ -7,11 +7,11 @@ from pathlib import Path
 env_path = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(dotenv_path=env_path)
 
-API_KEY = os.getenv("DEEPSEEK_API_KEY")
+API_KEY = os.getenv("DEEPSEEK_API_KEY") or "TU_API_KEY_DIRECTAMENTE_AQUÍ"
 API_URL = "https://api.deepseek.com/v1/chat/completions"
 
-if not API_KEY:
-    raise ValueError("❌ DEEPSEEK_API_KEY no encontrada en el archivo .env")
+if not API_KEY or API_KEY.startswith("TU_API_KEY"):
+    raise ValueError("❌ DEEPSEEK_API_KEY no cargada correctamente.")
 
 async def get_response_from_llm(prompt: str) -> str:
     headers = {
@@ -29,14 +29,14 @@ async def get_response_from_llm(prompt: str) -> str:
         "max_tokens": 800
     }
 
-    print("[🧠 Prompt enviado a DeepSeek]:", prompt)  # DEBUG
+    print("[🧠 Prompt enviado a DeepSeek]:", prompt)
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(API_URL, json=payload, headers=headers)
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
-            print("[✅ Respuesta recibida de DeepSeek]")  # DEBUG
+            print("[✅ Respuesta recibida de DeepSeek]")
             return content
 
     except Exception as e:
