@@ -1,7 +1,5 @@
-# backend/utils/format_prompt.py
-
 from datetime import datetime
-import pytz  # pip install pytz
+import pytz
 
 def build_prompt(token: str, user_message: str, market_data: dict) -> str:
     price = market_data.get("price", "N/D")
@@ -10,58 +8,51 @@ def build_prompt(token: str, user_message: str, market_data: dict) -> str:
     market_cap = market_data.get("market_cap", "N/D")
     sentiment = market_data.get("sentiment", "neutral")
 
-    # Fecha y hora actual con zona horaria (España por defecto)
     timezone = pytz.timezone("Europe/Madrid")
     now_str = datetime.now(timezone).strftime("%Y-%m-%d %H:%M:%S %Z")
 
     return f"""
-📌 Rol: Eres un **analista técnico senior especializado en criptomonedas**, con enfoque en lectura de mercado, indicadores y gestión del riesgo. Tu objetivo es producir un análisis claro, lógico y táctico, como si asesoraras a un fondo institucional.
+📌 Rol: Eres un **analista técnico senior especializado en criptomonedas**. Analiza el activo desde una perspectiva profesional, con lógica de mercado y foco institucional.
 
 ---
 
-📍 **Activo analizado:** {token.upper()}
-🕒 **Hora del análisis:** {now_str}
+📍 Activo: {token.upper()}
+🕒 Fecha/Hora: {now_str}
 
-📊 **Datos actuales del mercado (fuente: CoinGecko):**
+📊 Datos del mercado:
 - Precio: ${price}
 - Volumen (24h): {volume_24h}
 - Cambio 24h: {change_24h}%
-- Capitalización de mercado: ${market_cap}
-- Sentimiento general: {sentiment}
+- Market Cap: ${market_cap}
+- Sentimiento: {sentiment}
 
-📉 **Indicadores técnicos estimados (simulados por el sistema):**
-- RSI (1h): entre 55 y 70 → momentum moderado
-- EMAs (20/50): posible cruce alcista reciente
-- Soportes/Resistencias: basados en estructura local
-- Volumen: normal o creciente
+📉 Indicadores estimados:
+- RSI (1h): 55–70 (momentum moderado)
+- EMAs: posible cruce alcista
+- Volumen: creciente
 
-📚 **Métodos de análisis sugeridos**: RSI, EMAs, patrones de consolidación, volumen relativo, soportes dinámicos, estructura de velas.
-
----
-
-🧠 **Instrucciones para tu análisis:**
-
-1. Evalúa si es un buen momento para **entrar en posición**, basándote en los datos mostrados.
-2. Justifica tu análisis con **argumentos técnicos concretos** y escenarios posibles.
-3. Sugiere rangos razonables de **Stop-Loss (SL)** y **Take-Profit (TP)**.
-4. Propón la **estrategia técnica** más adecuada (pullback, breakout, etc.) y por qué.
-5. Finaliza con una **recomendación clara**, incluyendo:
-   - ✅ Probabilidad estimada de oportunidad de entrada (ej. 65%)
-   - ⚠️ Nivel de riesgo (1 = muy riesgoso, 10 = muy seguro)
+🧠 Instrucciones:
+1. Evalúa si conviene entrar en posición.
+2. Justifica el análisis técnico.
+3. Sugiere SL y TP razonables.
+4. Propón estrategia (pullback, breakout...).
+5. Finaliza con una recomendación clara:
+   - Probabilidad de oportunidad (%)
+   - Nivel de riesgo (1–10)
 
 ---
 
-📋 **Resumen accionable (obligatorio, formato tabla o listado):**
+📋 Formato de respuesta sugerido:
 - Acción recomendada: LONG / SHORT / ESPERAR
 - Precio actual: ${price}
 - SL / TP sugeridos
-- Nivel de riesgo (1-10)
-- Confianza en la operación (porcentaje)
+- Nivel de riesgo
+- Confianza en la operación
 
 ---
 
-🧾 **Consulta del usuario:**
+📣 Consulta del usuario:
 > "{user_message}"
 
-📣 Responde con lenguaje profesional, sin frases genéricas ni especulaciones vagas. Cierra con una recomendación práctica, útil y precisa.
+Responde con criterio profesional. Evita generalidades. Tu respuesta debe ser operativa y accionable.
 """

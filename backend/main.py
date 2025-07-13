@@ -6,7 +6,9 @@ from backend.deepseek_client import get_response_from_llm
 from backend.market_data import get_market_data
 from backend.logs.signal_logger import log_lite_signal
 from backend.utils import format_prompt, format_prompt_lite
+from pathlib import Path
 import logging
+import csv
 
 app = FastAPI()
 
@@ -81,6 +83,62 @@ async def analyze_token(req: AnalysisRequest):
             content={
                 "status": "error",
                 "message": "No se pudo completar el análisis.",
+                "details": str(e)
+            }
+        )
+
+@app.get("/signals_lite")
+def get_signals_lite():
+    log_path = Path("logs/signals_lite.csv")
+    if not log_path.exists():
+        return []
+
+    with open(log_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return list(reader)
+
+import csv
+from pathlib import Path
+from collections import Counter
+
+@app.get("/stats_lite")
+def get_lite_stats():
+    try:
+        log_file = Path("logs/signals_lite.csv")
+        if not log_file.exists():
+            return {"status": "ok", "stats": {}}
+
+        with log_file.open("r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        total = len(rows)
+        if total == 0:
+            return {"status": "ok", "stats": {}}
+
+        actions = Counter(row["action"] for row in rows)
+        avg_confidence = sum(int(row["confidence"]) for row in rows if row["confidence"]) / total
+        avg_risk = sum(float(row["risk"]) for row in rows if row["risk"]) / total
+
+        return {
+            "status": "ok",
+            "stats": {
+                "total_signals": total,
+                "long_count": actions.get("LONG", 0),
+                "short_count": actions.get("SHORT", 0),
+                "wait_count": actions.get("ESPERAR", 0),
+                "avg_confidence": round(avg_confidence, 2),
+                "avg_risk": round(avg_risk, 2)
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"[❌ Error en /stats_lite] {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "No se pudieron calcular las estadísticas.",
                 "details": str(e)
             }
         )
