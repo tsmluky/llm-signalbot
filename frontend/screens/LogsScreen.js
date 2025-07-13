@@ -1,3 +1,4 @@
+// screens/LogsScreen.js
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -5,9 +6,10 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 
-const API_URL = "http://localhost:8000/signals_lite"; // ⚠️ Cambiar IP real en móvil
+const API_URL = "http://localhost:8000/signals_lite"; // ⚠️ Cambiar por tu IP si usas móvil
 
 export default function LogsScreen() {
   const [signals, setSignals] = useState([]);
@@ -17,7 +19,7 @@ export default function LogsScreen() {
     try {
       const res = await fetch(API_URL);
       const data = await res.json();
-      setSignals(data.reverse()); // orden descendente
+      setSignals(data.reverse());
     } catch (err) {
       console.error("Error al cargar señales:", err);
     } finally {
@@ -30,27 +32,35 @@ export default function LogsScreen() {
   }, []);
 
   const renderItem = ({ item }) => {
-    const actionColor =
+    const bgColor =
       item.action === "LONG"
-        ? "#a5d6a7"
+        ? "#d0f0c0"
         : item.action === "SHORT"
-        ? "#ef9a9a"
+        ? "#fcd6d5"
         : "#e0e0e0";
 
     return (
-      <View style={[styles.card, { backgroundColor: actionColor }]}>
-        <Text style={styles.token}>{item.token} @ ${item.price_at_analysis}</Text>
+      <View style={[styles.card, { backgroundColor: bgColor }]}>
+        <Text style={styles.token}>
+          {item.token} @ ${parseFloat(item.price_at_analysis).toFixed(2)}
+        </Text>
         <Text style={styles.action}>🎯 Acción: {item.action}</Text>
-        <Text>TP: {item.take_profit} | SL: {item.stop_loss}</Text>
-        <Text>Confianza: {item.confidence}% | Riesgo: {item.risk}/10</Text>
-        <Text style={styles.timestamp}>{new Date(item.timestamp).toLocaleString()}</Text>
+        <Text style={styles.details}>
+          TP: {item.take_profit} | SL: {item.stop_loss}
+        </Text>
+        <Text style={styles.details}>
+          Confianza: {item.confidence}% | Riesgo: {item.risk}/10
+        </Text>
+        <Text style={styles.timestamp}>
+          {new Date(item.timestamp).toLocaleString()}
+        </Text>
       </View>
     );
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>📜 Historial de Señales Lite</Text>
+      <Text style={styles.header}>📜 Historial de Señales LITE</Text>
       {loading ? (
         <ActivityIndicator size="large" color="#007aff" />
       ) : (
@@ -58,6 +68,7 @@ export default function LogsScreen() {
           data={signals}
           keyExtractor={(_, index) => index.toString()}
           renderItem={renderItem}
+          contentContainerStyle={{ paddingBottom: 30 }}
         />
       )}
     </View>
@@ -65,23 +76,36 @@ export default function LogsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fdfdfd", padding: 16 },
-  header: { fontSize: 20, fontWeight: "bold", marginBottom: 12 },
+  container: {
+    flex: 1,
+    backgroundColor: "#fafafa",
+    padding: 16,
+  },
+  header: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 12,
+    textAlign: "center",
+  },
   card: {
     padding: 12,
-    marginBottom: 10,
+    marginBottom: 12,
     borderRadius: 10,
     elevation: 2,
   },
   token: {
-    fontWeight: "bold",
     fontSize: 16,
+    fontWeight: "bold",
     marginBottom: 4,
   },
   action: {
     fontSize: 15,
     fontWeight: "600",
     marginBottom: 2,
+  },
+  details: {
+    fontSize: 14,
+    marginBottom: 1,
   },
   timestamp: {
     marginTop: 6,
