@@ -7,15 +7,21 @@ from pathlib import Path
 # Setup de logs
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-# Cargar .env
+# Solo cargar .env si está disponible (útil en local)
 env_path = Path(__file__).resolve().parents[1] / ".env"
-load_dotenv(dotenv_path=env_path)
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
+# Obtener API Key desde variable de entorno
 API_KEY = os.getenv("DEEPSEEK_API_KEY")
 API_URL = "https://api.deepseek.com/v1/chat/completions"
 
-if not API_KEY or API_KEY.startswith("TU_API_KEY"):
-    logging.critical("❌ DEEPSEEK_API_KEY no cargada correctamente. Revisa tu archivo .env.")
+if not API_KEY:
+    logging.critical("❌ DEEPSEEK_API_KEY no está definida. Verifica tu entorno (.env o variables en Render).")
+    exit(1)
+
+if API_KEY.startswith("TU_API_KEY"):
+    logging.critical("❌ DEEPSEEK_API_KEY parece ser un placeholder. Reemplázala por una clave válida.")
     exit(1)
 
 async def get_response_from_llm(prompt: str, system_message: str = "Eres un analista técnico experto en criptomonedas.") -> str:
@@ -34,19 +40,20 @@ async def get_response_from_llm(prompt: str, system_message: str = "Eres un anal
         "max_tokens": 800
     }
 
-    logging.info("[🧠 Prompt enviado a DeepSeek]: %s", prompt)
+    logging.info("🧠 Prompt enviado a DeepSeek: %s", prompt)
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(API_URL, json=payload, headers=headers)
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
-            logging.info("[✅ Respuesta recibida correctamente]")
+            logging.info("✅ Respuesta recibida correctamente")
             return content
 
     except httpx.HTTPStatusError as e:
-        logging.error("[❌] Código HTTP: %s | Texto: %s", e.response.status_code, e.response.text)
-    except Exception as e:
-        logging.error("[❌] Error general al contactar con DeepSeek: %s", str(e))
+        logging.error("❌ Código HTTP: %s | Respuesta: %s", e.response.status_code, e.response.text)
+        return f"❌ Error HTTP {e.response.status_code}: {e.response.text}"
 
-    return "Error interno al contactar con el analista técnico."
+    except Exception as e:
+        logging.error("❌ Error general al contactar con DeepSeek: %s", str(e))
+        return "❌ Error interno al contactar con el modelo de análisis."

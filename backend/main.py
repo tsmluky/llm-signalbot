@@ -55,6 +55,11 @@ async def analyze_token(req: AnalysisRequest):
         logger.info(f"[🧠 Prompt generado] Modo: {mode.upper()} | Token: {token}")
 
         response = await get_response_from_llm(prompt)
+
+        if not response or "❌" in response or "Error" in response:
+            logger.warning("⚠️ Respuesta inválida del modelo: %s", response)
+            raise RuntimeError("El modelo no devolvió una respuesta válida.")
+
         logger.info("✅ Respuesta recibida del LLM.")
 
         # 📝 Logging por modo
@@ -79,8 +84,9 @@ async def analyze_token(req: AnalysisRequest):
 
     except Exception as e:
         logger.error(f"[❌ Error] {str(e)}")
+        status_code = 400 if isinstance(e, ValueError) else 500
         return JSONResponse(
-            status_code=400,
+            status_code=status_code,
             content={
                 "status": "error",
                 "message": "No se pudo completar el análisis.",
