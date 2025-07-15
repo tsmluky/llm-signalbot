@@ -1,4 +1,72 @@
+# =========================
+# Node / Yarn / Expo
+# =========================
+node_modules/
+.babelrc
+.expo/
+.expo-shared/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+dist/
+build/
+
+# =========================
+# IDEs / editores
+# =========================
+.vscode/
+.idea/
+*.swp
+
+# =========================
+# Sistemas operativos
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Android / iOS nativos
+# =========================
+android/
+ios/
+*.keystore
+*.jks
+*.p12
+
+# =========================
+# EAS / Expo CLI
+# =========================
+*.tar.gz
+*.apk
+*.aab
+*.ipa
+.env
+.env.*.local
+eas.json.backup
+credentials.json
+.secret/
+
+# =========================
+# Logs / tests / coverage
+# =========================
+coverage/
+*.log
+
+# =========================
+# Py env (si usas backend local en Python)
+# =========================
 __pycache__/
 *.pyc
-.env
-logs/*.csv
+*.pyo
+*.pyd
+env/
+venv/
+.venv/
+
+# =========================
+# Otros archivos personales
+# =========================
+*.sqlite
+*.db
+*.csv
