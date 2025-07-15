@@ -1,3 +1,5 @@
+# main.py
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,8 +12,8 @@ import csv
 from backend.deepseek_client import get_response_from_llm
 from backend.market_data import get_market_data
 from backend.logs.signal_logger import log_lite_signal, log_pro_signal, log_advisor_interaction
-from backend.utils import format_prompt, format_prompt_lite, format_prompt_assist
-from backend.utils.session_logger import log_advisor_session 
+from backend.utils.prompt_compiler import compile_prompt
+from backend.utils.session_logger import log_advisor_session
 
 app = FastAPI()
 
@@ -48,31 +50,23 @@ async def analyze_token(req: AnalysisRequest):
         if not market_data or market_data.get("price") is None:
             raise ValueError(f"No se pudo obtener información del token '{token}'.")
 
-        # 🧠 Prompt por modo
-        if mode == "lite":
-            prompt = format_prompt_lite.build_prompt(token, req.message, market_data)
-        elif mode == "pro":
-            prompt = format_prompt.build_prompt(token, req.message, market_data)
-        elif mode == "advisor":
-            prompt = format_prompt_assist.build_prompt(token, req.message, market_data)
-        else:
-            raise ValueError(f"Modo desconocido: {mode}")
-
+        # 🧠 Compilación del prompt
+        prompt = compile_prompt(mode=mode, token=token, user_message=req.message, market_data=market_data)
         logger.info(f"[🧠 Prompt generado] Modo: {mode.upper()} | Token: {token}")
 
         response = await get_response_from_llm(prompt)
         logger.info("✅ Respuesta recibida del LLM.")
 
-        # 📝 Logging estructurado
+        # 📝 Logging por modo
         if mode == "lite":
-            log_lite_signal(token, market_data.get("price", 0), response)
+            log_lite_signal(token, market_data.get("price", 0), prompt, response)
             logger.info("📝 Señal Lite registrada en logs.")
         elif mode == "pro":
-            log_pro_signal(token, market_data.get("price", 0), response)
+            log_pro_signal(token, market_data.get("price", 0), prompt, response)
             logger.info("📊 Señal Pro registrada en logs.")
         elif mode == "advisor":
-            log_advisor_interaction(token, req.message, response)
-            log_advisor_session(token, req.message, response)  
+            log_advisor_interaction(token, req.message, response, prompt)
+            log_advisor_session(token, req.message, response)
             logger.info("💬 Interacción Advisor y sesión registrada en logs.")
 
         return {
@@ -148,6 +142,7 @@ def get_lite_stats():
             }
         )
 
+# 🧠 Historial de conversaciones modo advisor
 @app.get("/session_history/{token}")
 def get_advisor_session(token: str):
     session_file = Path(f"logs/sessions/{token.upper()}.csv")
