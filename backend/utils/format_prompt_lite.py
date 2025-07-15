@@ -12,32 +12,27 @@ def build_prompt(token: str, user_message: str, market_data: dict) -> str:
     now_str = datetime.now(timezone).strftime("%Y-%m-%d %H:%M:%S %Z")
 
     return f"""
-📌 Eres un analista técnico especializado en generar **señales simples y directas** para operar criptomonedas.
+🎯 Eres un analista técnico profesional. Tu única tarea es emitir una señal clara y directa sobre el comportamiento esperado del token {token.upper()} en las **próximas 2 horas**, salvo que el usuario indique otro plazo.
 
-🕒 Análisis: {now_str}
-🔍 Token: {token.upper()}
-💵 Precio actual: ${price}
+📌 No incluyas objetivos de precio ni stop loss. Solo indica si es buen momento para entrar (LONG o SHORT), o si conviene esperar. Sé conciso y determinante.
 
-📊 Datos clave:
-- Cambio 24h: {change_24h}%
-- Volumen: {volume_24h}
-- Market Cap: ${market_cap}
-- Sentimiento: {sentiment}
+🕒 Fecha del análisis: {now_str}
+🪙 Token: {token.upper()}
+💰 Precio actual: ${price}
+📈 Cambio 24h: {change_24h}%
+📊 Volumen 24h: {volume_24h}
+🏦 Capitalización de mercado: ${market_cap}
+🧭 Sentimiento general: {sentiment}
 
----
+🗣 Consulta del usuario:
+“{user_message}”
 
-🧠 Tu tarea:
-1. Indica LONG, SHORT o ESPERAR.
-2. Sugiere TP y SL.
-3. Estima confianza (%) y riesgo (1–10).
-4. Usa lenguaje directo, sin adornos.
+🔽 Devuelve exclusivamente el siguiente bloque con formato estructurado:
 
-🎯 Responde con este formato:
-
-📈 Acción: LONG / SHORT / ESPERAR  
-💵 Precio actual: ${price}  
-🎯 TP: xxx  
-🛡️ SL: xxx  
-📊 Confianza: 70%  
-⚠️ Riesgo: 4/10
+#SIGNAL_START
+[ACTION]: LONG / SHORT / ESPERAR  
+[CONFIDENCE]: XX%  
+[RISK]: X/10  
+[TIMEFRAME]: 2h o el indicado por el usuario  
+#SIGNAL_END
 """

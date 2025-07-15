@@ -1,22 +1,25 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from backend.deepseek_client import get_response_from_llm
-from backend.market_data import get_market_data
-from backend.logs.signal_logger import log_lite_signal
-from backend.utils import format_prompt, format_prompt_lite
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from pathlib import Path
+from collections import Counter
 import logging
 import csv
 
+from backend.deepseek_client import get_response_from_llm
+from backend.market_data import get_market_data
+from backend.logs.signal_logger import log_lite_signal, log_pro_signal, log_advisor_interaction
+from backend.utils import format_prompt, format_prompt_lite, format_prompt_assist
+from backend.utils.session_logger import log_advisor_session 
+
 app = FastAPI()
 
-# Configurar logging
+# 🛡️ Logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-# Middleware CORS
+# 🌐 CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,12 +28,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request model
+# 📥 Request Model
 class AnalysisRequest(BaseModel):
     token: str
     message: str
-    mode: str = "pro"  # valores posibles: 'lite' o 'pro'
+    mode: str = "pro"  # 'lite' | 'pro' | 'advisor'
 
+# 🔍 Endpoint principal de análisis
 @app.post("/analyze")
 async def analyze_token(req: AnalysisRequest):
     try:
@@ -40,33 +44,36 @@ async def analyze_token(req: AnalysisRequest):
         token = req.token.upper()
         mode = req.mode.lower()
 
-        # Obtener datos del mercado
         market_data = get_market_data(token.lower())
         if not market_data or market_data.get("price") is None:
-            raise ValueError(f"No se pudo obtener información del token '{token}'")
+            raise ValueError(f"No se pudo obtener información del token '{token}'.")
 
-        # Construcción del prompt según modo
+        # 🧠 Prompt por modo
         if mode == "lite":
             prompt = format_prompt_lite.build_prompt(token, req.message, market_data)
         elif mode == "pro":
             prompt = format_prompt.build_prompt(token, req.message, market_data)
+        elif mode == "advisor":
+            prompt = format_prompt_assist.build_prompt(token, req.message, market_data)
         else:
-            raise ValueError(f"Modo inválido: '{mode}'. Usa 'lite' o 'pro'.")
+            raise ValueError(f"Modo desconocido: {mode}")
 
         logger.info(f"[🧠 Prompt generado] Modo: {mode.upper()} | Token: {token}")
-        logger.debug(f"Prompt completo:\n{prompt}")
 
-        # Llamada async al LLM
         response = await get_response_from_llm(prompt)
         logger.info("✅ Respuesta recibida del LLM.")
 
+        # 📝 Logging estructurado
         if mode == "lite":
-            log_lite_signal(
-                token=token,
-                price=market_data.get("price", 0),
-                response=response
-            )
+            log_lite_signal(token, market_data.get("price", 0), response)
             logger.info("📝 Señal Lite registrada en logs.")
+        elif mode == "pro":
+            log_pro_signal(token, market_data.get("price", 0), response)
+            logger.info("📊 Señal Pro registrada en logs.")
+        elif mode == "advisor":
+            log_advisor_interaction(token, req.message, response)
+            log_advisor_session(token, req.message, response)  
+            logger.info("💬 Interacción Advisor y sesión registrada en logs.")
 
         return {
             "status": "ok",
@@ -87,6 +94,7 @@ async def analyze_token(req: AnalysisRequest):
             }
         )
 
+# 📄 Devuelve todas las señales guardadas en modo Lite
 @app.get("/signals_lite")
 def get_signals_lite():
     log_path = Path("logs/signals_lite.csv")
@@ -97,10 +105,7 @@ def get_signals_lite():
         reader = csv.DictReader(f)
         return list(reader)
 
-import csv
-from pathlib import Path
-from collections import Counter
-
+# 📊 Estadísticas resumidas del modo Lite
 @app.get("/stats_lite")
 def get_lite_stats():
     try:
@@ -142,3 +147,28 @@ def get_lite_stats():
                 "details": str(e)
             }
         )
+
+@app.get("/session_history/{token}")
+def get_advisor_session(token: str):
+    session_file = Path(f"logs/sessions/{token.upper()}.csv")
+    if not session_file.exists():
+        return JSONResponse(status_code=404, content={"status": "error", "message": "No hay conversaciones para este token."})
+
+    try:
+        with session_file.open("r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            history = list(reader)
+
+        return {
+            "status": "ok",
+            "token": token.upper(),
+            "history": history
+        }
+
+    except Exception as e:
+        logger.error(f"[❌ Error al leer sesión de {token}]: {str(e)}")
+        return JSONResponse(status_code=500, content={
+            "status": "error",
+            "message": "Error al leer el historial.",
+            "details": str(e)
+        })

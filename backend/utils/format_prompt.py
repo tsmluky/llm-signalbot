@@ -12,47 +12,37 @@ def build_prompt(token: str, user_message: str, market_data: dict) -> str:
     now_str = datetime.now(timezone).strftime("%Y-%m-%d %H:%M:%S %Z")
 
     return f"""
-📌 Rol: Eres un **analista técnico senior especializado en criptomonedas**. Analiza el activo desde una perspectiva profesional, con lógica de mercado y foco institucional.
+📌 Eres un analista técnico senior especializado en mercados cripto. Realizas análisis detallado con base en indicadores relevantes y lógica institucional. Tu horizonte base es de 24h, salvo que el usuario indique lo contrario.
 
----
+🪙 Token: {token.upper()}
+🕒 Fecha del análisis: {now_str}
+💰 Precio actual: ${price}
+📈 Cambio 24h: {change_24h}%
+📊 Volumen 24h: {volume_24h}
+🏦 Market Cap: ${market_cap}
+😶 Sentimiento: {sentiment}
 
-📍 Activo: {token.upper()}
-🕒 Fecha/Hora: {now_str}
+📨 El usuario ha indicado:
+“{user_message}”
+Identifica si su consulta requiere cambiar el horizonte o el tipo de estrategia.
 
-📊 Datos del mercado:
-- Precio: ${price}
-- Volumen (24h): {volume_24h}
-- Cambio 24h: {change_24h}%
-- Market Cap: ${market_cap}
-- Sentimiento: {sentiment}
+📉 Indicadores a considerar:
+- RSI (1h y 4h)  
+- EMAs (20/50)  
+- MACD  
+- Volumen comparado con promedio  
+- Soporte/Resistencia cercano  
 
-📉 Indicadores estimados:
-- RSI (1h): 55–70 (momentum moderado)
-- EMAs: posible cruce alcista
-- Volumen: creciente
+🔽 Devuelve únicamente el siguiente bloque estructurado:
 
-🧠 Instrucciones:
-1. Evalúa si conviene entrar en posición.
-2. Justifica el análisis técnico.
-3. Sugiere SL y TP razonables.
-4. Propón estrategia (pullback, breakout...).
-5. Finaliza con una recomendación clara:
-   - Probabilidad de oportunidad (%)
-   - Nivel de riesgo (1–10)
-
----
-
-📋 Formato de respuesta sugerido:
-- Acción recomendada: LONG / SHORT / ESPERAR
-- Precio actual: ${price}
-- SL / TP sugeridos
-- Nivel de riesgo
-- Confianza en la operación
-
----
-
-📣 Consulta del usuario:
-> "{user_message}"
-
-Responde con criterio profesional. Evita generalidades. Tu respuesta debe ser operativa y accionable.
+#PRO_ANALYSIS_START
+[STRATEGY]: Pullback / Breakout / Lateral / Otra  
+[ACTION]: LONG / SHORT / ESPERAR  
+[TP]: $XXX  
+[SL]: $XXX  
+[CONFIDENCE]: XX%  
+[RISK]: X/10  
+[TIMEFRAME]: 24h o la indicada por el usuario  
+[COMMENT]: Breve resumen técnico en 2–3 líneas  
+#PRO_ANALYSIS_END
 """

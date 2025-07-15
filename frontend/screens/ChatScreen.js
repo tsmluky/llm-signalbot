@@ -3,43 +3,91 @@ import {
   View,
   Text,
   TextInput,
-  Button,
   ScrollView,
   StyleSheet,
   Switch,
   ActivityIndicator,
   TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Markdown from "react-native-markdown-display";
 import { getLLMResponse } from "../services/llmService";
 
+const MAX_MESSAGES = 50; // puedes ajustar el límite aquí
+
 const ChatScreen = ({ route }) => {
   const initialToken = route?.params?.token || "BTC";
+  const initialMode = route?.params?.mode || "lite";
   const [token, setToken] = useState(initialToken);
   const [prompt, setPrompt] = useState("");
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isProMode, setIsProMode] = useState(false);
+  const [isProMode, setIsProMode] = useState(initialMode === "pro");
 
   const scrollRef = useRef();
   const mode = isProMode ? "pro" : "lite";
 
+  const STORAGE_KEY = `advisor_history_${token.toUpperCase()}`;
+
+  const saveHistory = async (data) => {
+    try {
+      const sliced = data.slice(-MAX_MESSAGES);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sliced));
+    } catch (e) {
+      console.warn("❌ Error guardando historial:", e);
+    }
+  };
+
+  const loadHistory = async () => {
+    try {
+      const saved = await AsyncStorage.getItem(STORAGE_KEY);
+      if (saved) setHistory(JSON.parse(saved));
+    } catch (e) {
+      console.warn("❌ Error cargando historial:", e);
+    }
+  };
+
   const handleSend = async () => {
     if (!prompt.trim() || !token.trim()) return;
 
-    const newUserMessage = { sender: "user", text: prompt };
-    setHistory((prev) => [...prev, newUserMessage]);
+    const newUserMessage = {
+      sender: "user",
+      text: prompt,
+      mode,
+      timestamp: new Date().toISOString(),
+    };
+
+    const updatedHistory = [...history, newUserMessage];
+    setHistory(updatedHistory);
     setPrompt("");
     setLoading(true);
 
     try {
       const response = await getLLMResponse(prompt, token, mode);
-      const botMessage = { sender: "bot", text: response };
-      setHistory((prev) => [...prev, botMessage]);
+      const botMessage = {
+        sender: "bot",
+        text: response,
+        mode,
+        timestamp: new Date().toISOString(),
+      };
+
+      const finalHistory = [...updatedHistory, botMessage];
+      setHistory(finalHistory);
+
+      if (mode === "advisor") {
+        await saveHistory(finalHistory);
+      }
     } catch (err) {
       setHistory((prev) => [
         ...prev,
-        { sender: "bot", text: "❌ Error en la respuesta" },
+        {
+          sender: "bot",
+          text: "❌ Error en la respuesta",
+          mode,
+          timestamp: new Date().toISOString(),
+        },
       ]);
     } finally {
       setLoading(false);
@@ -52,81 +100,95 @@ const ChatScreen = ({ route }) => {
     }
   }, [history]);
 
+  useEffect(() => {
+    if (mode === "advisor") {
+      loadHistory();
+    }
+  }, [mode, token]);
+
   return (
-    <View style={styles.container}>
-      <View style={styles.headerContainer}>
-        <Text style={styles.header}>LLM SignalBot</Text>
-        <View style={styles.modeToggle}>
-          <Text style={styles.modeText}>
-            {isProMode ? "PRO" : "LITE"} Mode
-          </Text>
-          <Switch
-            value={isProMode}
-            onValueChange={setIsProMode}
-            trackColor={{ false: "#ccc", true: "#81d4fa" }}
-            thumbColor={isProMode ? "#007aff" : "#eee"}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={100}
+    >
+      <View style={{ flex: 1 }}>
+        <View style={styles.headerContainer}>
+          <Text style={styles.header}>LLM SignalBot</Text>
+          <View style={styles.modeToggle}>
+            <Text style={styles.modeText}>{isProMode ? "PRO" : "LITE"} Mode</Text>
+            <Switch
+              value={isProMode}
+              onValueChange={setIsProMode}
+              trackColor={{ false: "#ccc", true: "#81d4fa" }}
+              thumbColor={isProMode ? "#007aff" : "#eee"}
+            />
+          </View>
+        </View>
+
+        <View style={styles.tokenContainer}>
+          <Text style={styles.tokenLabel}>Token:</Text>
+          <TextInput
+            style={styles.tokenInput}
+            placeholder="Ej: BTC, ETH"
+            value={token}
+            onChangeText={setToken}
           />
         </View>
-      </View>
 
-      <View style={styles.tokenContainer}>
-        <Text style={styles.tokenLabel}>Token:</Text>
+        <ScrollView style={styles.history} ref={scrollRef}>
+          {history.map((msg, index) => (
+            <View
+              key={index}
+              style={[
+                styles.messageBubble,
+                msg.sender === "user"
+                  ? styles.userBubble
+                  : styles.botBubble,
+              ]}
+            >
+              <Text style={styles.modeTag}>
+                {msg.sender === "user" ? "Tú" : "elBot"} | Modo:{" "}
+                {msg.mode.toUpperCase()}
+              </Text>
+              {msg.sender === "user" ? (
+                <Text style={styles.userText}>{msg.text}</Text>
+              ) : (
+                <Markdown style={markdownStyles}>{msg.text}</Markdown>
+              )}
+            </View>
+          ))}
+          {loading && (
+            <ActivityIndicator
+              size="small"
+              color="#007aff"
+              style={{ marginTop: 10 }}
+            />
+          )}
+        </ScrollView>
+
         <TextInput
-          style={styles.tokenInput}
-          placeholder="Ej: BTC, ETH"
-          value={token}
-          onChangeText={setToken}
+          style={styles.promptInput}
+          placeholder="¿Qué deseas preguntar?"
+          value={prompt}
+          onChangeText={setPrompt}
+          multiline
         />
+
+        <TouchableOpacity
+          style={[
+            styles.sendButton,
+            { backgroundColor: loading || !prompt.trim() ? "#ccc" : "#007aff" },
+          ]}
+          onPress={handleSend}
+          disabled={loading || !prompt.trim()}
+        >
+          <Text style={styles.sendButtonText}>
+            {loading ? "Enviando..." : "Enviar"}
+          </Text>
+        </TouchableOpacity>
       </View>
-
-      <ScrollView style={styles.history} ref={scrollRef}>
-        {history.map((msg, index) => (
-          <View
-            key={index}
-            style={[
-              styles.messageBubble,
-              msg.sender === "user"
-                ? styles.userBubble
-                : styles.botBubble,
-            ]}
-          >
-            {msg.sender === "user" ? (
-              <Text style={styles.userText}>Tú: {msg.text}</Text>
-            ) : (
-              <Markdown style={markdownStyles}>{msg.text}</Markdown>
-            )}
-          </View>
-        ))}
-        {loading && (
-          <ActivityIndicator
-            size="small"
-            color="#007aff"
-            style={{ marginTop: 10 }}
-          />
-        )}
-      </ScrollView>
-
-      <TextInput
-        style={styles.promptInput}
-        placeholder="¿Qué deseas preguntar?"
-        value={prompt}
-        onChangeText={setPrompt}
-        multiline
-      />
-
-      <TouchableOpacity
-        style={[
-          styles.sendButton,
-          { backgroundColor: loading || !prompt.trim() ? "#ccc" : "#007aff" },
-        ]}
-        onPress={handleSend}
-        disabled={loading || !prompt.trim()}
-      >
-        <Text style={styles.sendButtonText}>
-          {loading ? "Enviando..." : "Enviar"}
-        </Text>
-      </TouchableOpacity>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -135,14 +197,13 @@ export default ChatScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
     backgroundColor: "#fdfdfd",
   },
   headerContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    padding: 16,
   },
   header: {
     fontSize: 22,
@@ -160,7 +221,8 @@ const styles = StyleSheet.create({
   tokenContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
   tokenLabel: {
     marginRight: 8,
@@ -173,17 +235,22 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     padding: 8,
   },
+  history: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
   promptInput: {
     borderWidth: 1,
     borderColor: "#ccc",
     borderRadius: 8,
     padding: 10,
     minHeight: 60,
+    margin: 16,
     textAlignVertical: "top",
-    marginTop: 10,
   },
   sendButton: {
-    marginTop: 10,
+    marginHorizontal: 16,
+    marginBottom: 16,
     padding: 12,
     borderRadius: 8,
     alignItems: "center",
@@ -192,13 +259,9 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
   },
-  history: {
-    flex: 1,
-    marginTop: 10,
-  },
   messageBubble: {
     padding: 10,
-    marginVertical: 4,
+    marginVertical: 6,
     borderRadius: 8,
     maxWidth: "90%",
   },
@@ -212,6 +275,12 @@ const styles = StyleSheet.create({
   },
   userText: {
     color: "#333",
+  },
+  modeTag: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 4,
+    fontStyle: "italic",
   },
 });
 

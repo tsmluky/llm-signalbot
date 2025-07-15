@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 
-const API_URL = "http://localhost:8000/stats_lite"; // ⚠️ Cambiar por tu IP si usas móvil
+const API_URL = "https://signalbot-api.onrender.com/stats_lite";
 
 export default function StatsScreen() {
   const [stats, setStats] = useState(null);

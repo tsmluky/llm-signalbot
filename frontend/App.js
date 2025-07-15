@@ -1,11 +1,12 @@
-// App.js
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+
 import HomeScreen from "./screens/HomeScreen";
 import ChatScreen from "./screens/ChatScreen";
-import LogsScreen from "./screens/LogsScreen"; // 👈 Añadido si usas Logs
-import StatsScreen from "./screens/StatsScreen"; // 👈 Añadido si usas Stats
+import LogsScreen from "./screens/LogsScreen";
+import StatsScreen from "./screens/StatsScreen";
+import AdvisorChatScreen from "./screens/AdvisorChatScreen"; // ✅ nueva importación
 
 const Stack = createNativeStackNavigator();
 
@@ -41,6 +42,11 @@ export default function App() {
           name="Estadísticas"
           component={StatsScreen}
           options={{ title: "Estadísticas Globales" }}
+        />
+        <Stack.Screen
+          name="AdvisorChat"
+          component={AdvisorChatScreen}
+          options={{ title: "👨‍🏫 Asesor Financiero" }}
         />
       </Stack.Navigator>
     </NavigationContainer>

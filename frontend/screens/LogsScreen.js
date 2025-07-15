@@ -9,7 +9,7 @@ import {
   ScrollView,
 } from "react-native";
 
-const API_URL = "http://localhost:8000/signals_lite"; // ⚠️ Cambiar por tu IP si usas móvil
+const API_URL = "https://signalbot-api.onrender.com/signals_lite";
 
 export default function LogsScreen() {
   const [signals, setSignals] = useState([]);

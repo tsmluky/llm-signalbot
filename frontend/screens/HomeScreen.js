@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   FlatList,
   Switch,
+  Button,
 } from "react-native";
 
 const tokens = ["BTC", "ETH", "SOL", "MATIC", "ADA", "LINK", "DOGE", "AVAX"];
@@ -50,6 +51,30 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
         )}
       />
+
+      <View style={styles.extraOptions}>
+        <Button
+          title="📜 Historial Señales LITE"
+          onPress={() => navigation.navigate("Historial")}
+        />
+        <Button
+          title="📈 Estadísticas Globales"
+          onPress={() => navigation.navigate("Estadísticas")}
+        />
+
+        {/* ✅ Botón para acceder al nuevo modo Advisor */}
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() =>
+            navigation.navigate("AdvisorChat", {
+              token: "BTC",
+              mode: "advisor",
+            })
+          }
+        >
+          <Text style={styles.buttonText}>🎓 Asesor Financiero</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -99,5 +124,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#007aff",
+  },
+  extraOptions: {
+    marginTop: 30,
+    gap: 10,
+  },
+  navButton: {
+    backgroundColor: "#2196f3",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  buttonText: {
+    color: "#fff",
+    fontWeight: "600",
   },
 });
