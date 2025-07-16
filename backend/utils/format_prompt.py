@@ -1,5 +1,3 @@
-# utils/format_prompt.py
-
 from datetime import datetime
 import pytz
 
@@ -16,56 +14,49 @@ def build_prompt(token: str, user_message: str, market_data: dict) -> str:
     sentiment = market_data.get("sentiment", "neutral")
 
     return f"""
-#PRO_PROMPT_V1
+#PRO_PROMPT_V3
+#INPUT_DATA
+TOKEN: {token.upper()}
+DATE: {now_str}
+PRICE: {price}
+CHANGE_24H: {change}%
+VOLUME_24H: {volume}
+MARKET_CAP: {cap}
+SENTIMENT: {sentiment}
 
-📌 **Análisis técnico avanzado de {token.upper()}**
-
-🎯 Tu tarea es generar un análisis técnico profesional para el token {token.upper()}, combinando indicadores clásicos, estructura de mercado y lógica institucional. El horizonte base es de **24h**, salvo que el usuario indique lo contrario. El lenguaje debe ser formal, preciso y accionable. Evitá frases vagas o genéricas.
-
-🕒 Fecha del análisis: {now_str}  
-🪙 Token: {token.upper()}  
-💰 Precio actual: ${price}  
-📈 Cambio en 24h: {change}%  
-📊 Volumen en 24h: {volume}  
-🏦 Capitalización: ${cap}  
-🧭 Sentimiento general: {sentiment}
-
-🗣️ **Consulta del usuario:**  
+#USER_QUERY
 “{message}”
 
----
+#EVAL_INSTRUCTIONS
+[CTXT]: contexto técnico global actual.
+[TA]: indicadores clave (RSI, EMAs, MACD, Volumen, Soportes/Resistencias).
+[PLAN]: estrategia operativa sugerida según escenario.
+[INSIGHT]: comentario profesional final, directo y analítico.
+[PARAMS]: acción sugerida, confianza, riesgo, TP, SL y timeframe.
 
-🔍 Indicadores sugeridos (elige los más relevantes según contexto actual):  
-- RSI (1h, 4h, 24h)  
-- EMAs (20, 50, 100)  
-- MACD  
-- Volumen relativo  
-- Estructura de mercado  
-- Soportes y resistencias  
-- Contexto macroeconómico y sentimiento
-
----
-
-🎓 **Estructura de la respuesta:**
+#OUTPUT_FORMAT
+Responde exclusivamente dentro de #ANALYSIS_START y #ANALYSIS_END.
+Respeta este orden estructural y usa un tono de analista profesional.
 
 #ANALYSIS_START
+[CTXT]:
+…
 
-📊 **Análisis Técnico Detallado:**  
-Describe la situación técnica actual, nivel clave, momentum, zonas a vigilar. Incluye interpretación con lógica profesional.
+[TA]:
+…
 
-📈 **Estrategia Sugerida:**  
-Tipo de movimiento: Pullback / Breakout / Rango / Otra. Justifica por qué.
+[PLAN]:
+…
 
-🧠 **Comentario Profesional:**  
-Resumen técnico del escenario con lenguaje claro, pero experto. Conclusión sólida.
+[INSIGHT]:
+…
 
-🎯 **Parámetros de Acción:**
-[ACTION]: LONG / SHORT / ESPERAR  
-[CONFIDENCE]: XX%  
-[RISK]: X/10  
-[TP]: $XXX  
-[SL]: $XXX  
-[TIMEFRAME]: 24h u otro indicado por el usuario
-
+[PARAMS]:
+[ACTION]: LONG / SHORT / ESPERAR
+[CONFIDENCE]: XX%
+[RISK]: X/10
+[TP]: $XXX
+[SL]: $XXX
+[TIMEFRAME]: 24h u otro
 #ANALYSIS_END
 """
