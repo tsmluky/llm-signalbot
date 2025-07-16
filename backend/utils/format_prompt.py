@@ -57,6 +57,6 @@ Respeta este orden estructural y usa un tono de analista profesional.
 [RISK]: X/10
 [TP]: $XXX
 [SL]: $XXX
-[TIMEFRAME]: 24h u otro
+[TIMEFRAME]: 24h u otrou
 #ANALYSIS_END
 """
