@@ -36,6 +36,18 @@ class AnalysisRequest(BaseModel):
     message: str
     mode: str = "pro"  # 'lite' | 'pro' | 'advisor'
 
+# ✅ Validación inteligente por modo
+def is_valid_response(mode: str, response: str) -> bool:
+    if not response or "❌" in response:
+        return False
+    if mode == "lite":
+        return "#SIGNAL_START" in response and "#SIGNAL_END" in response
+    elif mode == "pro":
+        return "#ANALYSIS_START" in response and "#ANALYSIS_END" in response
+    elif mode == "advisor":
+        return len(response.strip()) > 50
+    return False
+
 # 🔍 Endpoint principal de análisis
 @app.post("/analyze")
 async def analyze_token(req: AnalysisRequest):
@@ -55,14 +67,14 @@ async def analyze_token(req: AnalysisRequest):
         # 🧠 Compilación del prompt
         prompt = compile_prompt(mode=mode, token=token, user_message=req.message, market_data=market_data)
         logger.info(f"[🧠 Prompt generado] Modo: {mode.upper()} | Token: {token}")
-        logger.debug(f"[🧾 Prompt completo]:\n{prompt}")
+        logger.debug(f"[🧾 Prompt completo ({len(prompt)} chars)]:\n{prompt}")
 
-        # 🧠 Consulta al modelo
+        # 📡 Llamada al modelo
         response = await get_response_from_llm(prompt)
 
-        if not response or "#ANALYSIS_START" not in response or "#ANALYSIS_END" not in response:
+        if not is_valid_response(mode, response):
             logger.warning(f"⚠️ Prompt enviado:\n{prompt}")
-            logger.warning(f"⚠️ Respuesta inválida:\n{response}")
+            logger.warning(f"⚠️ Respuesta inválida o incompleta (modo: {mode}):\n{response}")
             raise RuntimeError("El modelo no devolvió una respuesta válida o estructurada.")
 
         logger.info("✅ Respuesta recibida del LLM.")
