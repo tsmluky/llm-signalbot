@@ -43,31 +43,36 @@ async def analyze_token(req: AnalysisRequest):
         if not isinstance(req.message, str) or not isinstance(req.token, str):
             raise ValueError("El mensaje y el token deben ser strings.")
 
-        token = req.token.upper()
-        mode = req.mode.lower()
+        token = req.token.upper().strip()
+        mode = req.mode.lower().strip()
 
         market_data = get_market_data(token.lower())
-        if not market_data or market_data.get("price") is None:
-            raise ValueError(f"No se pudo obtener información del token '{token}'.")
+        price = market_data.get("price")
+
+        if not market_data or price is None or str(price).lower() in ["nan", "n/d", ""]:
+            raise ValueError(f"No se pudo obtener información válida del token '{token}'.")
 
         # 🧠 Compilación del prompt
         prompt = compile_prompt(mode=mode, token=token, user_message=req.message, market_data=market_data)
         logger.info(f"[🧠 Prompt generado] Modo: {mode.upper()} | Token: {token}")
+        logger.debug(f"[🧾 Prompt completo]:\n{prompt}")
 
+        # 🧠 Consulta al modelo
         response = await get_response_from_llm(prompt)
 
-        if not response or "❌" in response or "Error" in response:
-            logger.warning("⚠️ Respuesta inválida del modelo: %s", response)
-            raise RuntimeError("El modelo no devolvió una respuesta válida.")
+        if not response or "#ANALYSIS_START" not in response or "#ANALYSIS_END" not in response:
+            logger.warning(f"⚠️ Prompt enviado:\n{prompt}")
+            logger.warning(f"⚠️ Respuesta inválida:\n{response}")
+            raise RuntimeError("El modelo no devolvió una respuesta válida o estructurada.")
 
         logger.info("✅ Respuesta recibida del LLM.")
 
         # 📝 Logging por modo
         if mode == "lite":
-            log_lite_signal(token, market_data.get("price", 0), prompt, response)
+            log_lite_signal(token, float(price), prompt, response)
             logger.info("📝 Señal Lite registrada en logs.")
         elif mode == "pro":
-            log_pro_signal(token, market_data.get("price", 0), prompt, response)
+            log_pro_signal(token, float(price), prompt, response)
             logger.info("📊 Señal Pro registrada en logs.")
         elif mode == "advisor":
             log_advisor_interaction(token, req.message, response, prompt)
@@ -108,6 +113,15 @@ def get_signals_lite():
 # 📊 Estadísticas resumidas del modo Lite
 @app.get("/stats_lite")
 def get_lite_stats():
+    def parse_risk_value(risk_str: str) -> float:
+        try:
+            if "/" in risk_str:
+                num, denom = risk_str.split("/")
+                return float(num) / float(denom) * 10
+            return float(risk_str)
+        except:
+            return 0.0
+
     try:
         log_file = Path("logs/signals_lite.csv")
         if not log_file.exists():
@@ -123,7 +137,7 @@ def get_lite_stats():
 
         actions = Counter(row["action"] for row in rows)
         avg_confidence = sum(int(row["confidence"]) for row in rows if row["confidence"]) / total
-        avg_risk = sum(float(row["risk"]) for row in rows if row["risk"]) / total
+        avg_risk = sum(parse_risk_value(row["risk"]) for row in rows if row["risk"]) / total
 
         return {
             "status": "ok",
