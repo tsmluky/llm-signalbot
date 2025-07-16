@@ -37,7 +37,7 @@ async def get_response_from_llm(prompt: str, system_message: str = "Eres un anal
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.7,
-        "max_tokens": 800
+        "max_tokens": 2500
     }
 
     logging.info("🧠 Prompt enviado a DeepSeek: %s", prompt)
