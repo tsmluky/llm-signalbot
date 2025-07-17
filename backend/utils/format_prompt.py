@@ -1,5 +1,6 @@
 from datetime import datetime
 import pytz
+import importlib
 
 def build_prompt(token: str, user_message: str, market_data: dict) -> str:
     timezone = pytz.timezone("Europe/Madrid")
@@ -12,6 +13,14 @@ def build_prompt(token: str, user_message: str, market_data: dict) -> str:
     volume = market_data.get("volume_24h", "N/D")
     cap = market_data.get("market_cap", "N/D")
     sentiment = market_data.get("sentiment", "neutral")
+
+    # Cargar contexto del token desde utils.tokens
+    try:
+        context_module = importlib.import_module(f"backend.utils.tokens.{token.lower()}")
+        context = context_module.get_context()
+    except Exception:
+        from backend.utils.tokens.default import get_context
+        context = get_context()
 
     return f"""
 #PRO_PROMPT_V3
@@ -26,6 +35,9 @@ SENTIMENT: {sentiment}
 
 #USER_QUERY
 “{message}”
+
+#CONTEXT
+{context}
 
 #EVAL_INSTRUCTIONS
 [CTXT]: contexto técnico global actual.

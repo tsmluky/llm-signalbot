@@ -44,7 +44,7 @@ export default function StatsScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>📈 Estadísticas de Señales LITE</Text>
       <View style={styles.card}>
-        <Text style={styles.item}>Total: {stats.total_signals}</Text>
+        <Text style={styles.item}>📌 Total: {stats.total_signals}</Text>
         <Text style={styles.item}>🟢 LONG: {stats.long_count}</Text>
         <Text style={styles.item}>🔴 SHORT: {stats.short_count}</Text>
         <Text style={styles.item}>⚪ ESPERAR: {stats.wait_count}</Text>

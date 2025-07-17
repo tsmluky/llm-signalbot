@@ -6,7 +6,6 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
-  ScrollView,
 } from "react-native";
 
 const API_URL = "https://signalbot-api.onrender.com/signals_lite";
@@ -19,9 +18,13 @@ export default function LogsScreen() {
     try {
       const res = await fetch(API_URL);
       const data = await res.json();
-      setSignals(data.reverse());
+      if (data.status === "ok" && Array.isArray(data.signals)) {
+        setSignals(data.signals);
+      } else {
+        console.warn("No se encontraron señales.");
+      }
     } catch (err) {
-      console.error("Error al cargar señales:", err);
+      console.error("❌ Error al cargar señales:", err);
     } finally {
       setLoading(false);
     }
@@ -34,23 +37,24 @@ export default function LogsScreen() {
   const renderItem = ({ item }) => {
     const bgColor =
       item.action === "LONG"
-        ? "#d0f0c0"
+        ? "#d4fcd2"
         : item.action === "SHORT"
-        ? "#fcd6d5"
+        ? "#fddcdc"
         : "#e0e0e0";
 
     return (
       <View style={[styles.card, { backgroundColor: bgColor }]}>
         <Text style={styles.token}>
-          {item.token} @ ${parseFloat(item.price_at_analysis).toFixed(2)}
+          {item.token} @ ${parseFloat(item.price || 0).toFixed(2)}
         </Text>
         <Text style={styles.action}>🎯 Acción: {item.action}</Text>
         <Text style={styles.details}>
-          TP: {item.take_profit} | SL: {item.stop_loss}
+          TP: {item.tp || "N/D"} | SL: {item.sl || "N/D"}
         </Text>
         <Text style={styles.details}>
-          Confianza: {item.confidence}% | Riesgo: {item.risk}/10
+          Confianza: {item.confidence || "?"}% | Riesgo: {item.risk || "?"}
         </Text>
+        <Text style={styles.details}>⏳ Timeframe: {item.timeframe || "?"}</Text>
         <Text style={styles.timestamp}>
           {new Date(item.timestamp).toLocaleString()}
         </Text>

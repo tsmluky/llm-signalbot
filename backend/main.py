@@ -113,14 +113,34 @@ async def analyze_token(req: AnalysisRequest):
 
 # 📄 Devuelve todas las señales guardadas en modo Lite
 @app.get("/signals_lite")
+@app.get("/signals_lite")
 def get_signals_lite():
     log_path = Path("logs/signals_lite.csv")
     if not log_path.exists():
         return []
 
-    with open(log_path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        return list(reader)
+    try:
+        with log_path.open(newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        # Ordenar por timestamp descendente (más reciente primero)
+        rows.sort(key=lambda x: x["timestamp"], reverse=True)
+        return {
+            "status": "ok",
+            "total": len(rows),
+            "signals": rows
+        }
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "Error al leer señales Lite.",
+                "details": str(e)
+            }
+        )
 
 # 📊 Estadísticas resumidas del modo Lite
 @app.get("/stats_lite")
