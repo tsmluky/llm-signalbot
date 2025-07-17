@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  SafeAreaView,
 } from "react-native";
 import Markdown from "react-native-markdown-display";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -45,7 +46,7 @@ const AdvisorChatScreen = () => {
 
   const saveHistory = async () => {
     try {
-      const limited = history.slice(-50); // Máximo 50 mensajes
+      const limited = history.slice(-50);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(limited));
     } catch (err) {
       console.error("❌ Error guardando historial:", err);
@@ -93,65 +94,73 @@ const AdvisorChatScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <Text style={styles.header}>👨‍🏫 Consejo Financiero</Text>
-
-      <ScrollView
-        style={styles.history}
-        ref={scrollRef}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fdfdfd" }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={100}
+        style={styles.container}
       >
-        {history.map((msg, index) => (
-          <View
-            key={index}
-            style={[
-              styles.messageBubble,
-              msg.sender === "user" ? styles.userBubble : styles.botBubble,
-            ]}
-          >
-            <Text style={styles.modeTag}>
-              {msg.sender === "user" ? "Tú" : "🤖 elbot"}
-            </Text>
-            {msg.sender === "user" ? (
-              <Text style={styles.userText}>{msg.text}</Text>
-            ) : (
-              <Markdown style={markdownStyles}>{msg.text}</Markdown>
-            )}
-          </View>
-        ))}
-        {loading && (
-          <ActivityIndicator
-            size="small"
-            color="#007aff"
-            style={{ marginVertical: 10 }}
+        <Text style={styles.header}>👨‍🏫 Consejo Financiero</Text>
+
+        <ScrollView
+          style={styles.history}
+          ref={scrollRef}
+          keyboardShouldPersistTaps="handled"
+        >
+          {history.map((msg, index) => (
+            <View
+              key={index}
+              style={[
+                styles.messageBubble,
+                msg.sender === "user" ? styles.userBubble : styles.botBubble,
+              ]}
+            >
+              <Text style={styles.modeTag}>
+                {msg.sender === "user" ? "Tú" : "🤖 elbot"}
+              </Text>
+              {msg.sender === "user" ? (
+                <Text style={styles.userText}>{msg.text}</Text>
+              ) : (
+                <Markdown style={markdownStyles}>{msg.text}</Markdown>
+              )}
+            </View>
+          ))}
+          {loading && (
+            <ActivityIndicator
+              size="small"
+              color="#007aff"
+              style={{ marginVertical: 10 }}
+            />
+          )}
+        </ScrollView>
+
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.promptInput}
+            placeholder="Escribe tu consulta libre..."
+            value={prompt}
+            onChangeText={setPrompt}
+            multiline
           />
-        )}
-      </ScrollView>
-
-      <TextInput
-        style={styles.promptInput}
-        placeholder="Escribe tu consulta libre..."
-        value={prompt}
-        onChangeText={setPrompt}
-        multiline
-      />
-
-      <TouchableOpacity
-        style={[
-          styles.sendButton,
-          { backgroundColor: loading || !prompt.trim() ? "#ccc" : "#007aff" },
-        ]}
-        onPress={handleSend}
-        disabled={loading || !prompt.trim()}
-      >
-        <Text style={styles.sendButtonText}>
-          {loading ? "Enviando..." : "Enviar"}
-        </Text>
-      </TouchableOpacity>
-    </KeyboardAvoidingView>
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              {
+                backgroundColor: loading || !prompt.trim()
+                  ? "#ccc"
+                  : "#007aff",
+              },
+            ]}
+            onPress={handleSend}
+            disabled={loading || !prompt.trim()}
+          >
+            <Text style={styles.sendButtonText}>
+              {loading ? "Enviando..." : "Enviar"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
@@ -160,18 +169,16 @@ export default AdvisorChatScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
-    backgroundColor: "#fdfdfd",
+    paddingHorizontal: 16,
   },
   header: {
     fontSize: 20,
     fontWeight: "bold",
     textAlign: "center",
-    marginBottom: 10,
+    marginVertical: 10,
   },
   history: {
     flex: 1,
-    marginTop: 10,
   },
   messageBubble: {
     padding: 10,
@@ -196,6 +203,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     fontStyle: "italic",
   },
+  inputContainer: {
+    marginTop: 8,
+  },
   promptInput: {
     borderWidth: 1,
     borderColor: "#ccc",
@@ -203,10 +213,9 @@ const styles = StyleSheet.create({
     padding: 10,
     minHeight: 60,
     textAlignVertical: "top",
-    marginTop: 10,
   },
   sendButton: {
-    marginTop: 10,
+    marginTop: 8,
     padding: 12,
     borderRadius: 8,
     alignItems: "center",
