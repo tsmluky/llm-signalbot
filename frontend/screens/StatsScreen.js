@@ -1,4 +1,5 @@
 // screens/StatsScreen.js
+
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 
@@ -44,16 +45,23 @@ export default function StatsScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>📈 Estadísticas de Señales LITE</Text>
       <View style={styles.card}>
-        <Text style={styles.item}>📌 Total: {stats.total_signals}</Text>
-        <Text style={styles.item}>🟢 LONG: {stats.long_count}</Text>
-        <Text style={styles.item}>🔴 SHORT: {stats.short_count}</Text>
-        <Text style={styles.item}>⚪ ESPERAR: {stats.wait_count}</Text>
-        <Text style={styles.item}>📊 Confianza promedio: {stats.avg_confidence}%</Text>
-        <Text style={styles.item}>⚠️ Riesgo promedio: {stats.avg_risk}/10</Text>
+        <Stat label="📌 Total" value={stats.total_signals} />
+        <Stat label="🟢 LONG" value={stats.long_count} />
+        <Stat label="🔴 SHORT" value={stats.short_count} />
+        <Stat label="⚪ ESPERAR" value={stats.wait_count} />
+        <Stat label="📊 Confianza promedio" value={`${stats.avg_confidence}%`} />
+        <Stat label="⚠️ Riesgo promedio" value={`${stats.avg_risk}/10`} />
       </View>
     </View>
   );
 }
+
+const Stat = ({ label, value }) => (
+  <View style={styles.statRow}>
+    <Text style={styles.statLabel}>{label}</Text>
+    <Text style={styles.statValue}>{value}</Text>
+  </View>
+);
 
 const styles = StyleSheet.create({
   container: {
@@ -72,10 +80,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     padding: 20,
     borderRadius: 10,
-    elevation: 3,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
   },
-  item: {
+  statRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  statLabel: {
     fontSize: 16,
-    marginBottom: 10,
+    fontWeight: "500",
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
   },
 });

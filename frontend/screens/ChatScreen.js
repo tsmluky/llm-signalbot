@@ -10,26 +10,45 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Markdown from "react-native-markdown-display";
 import { getLLMResponse } from "../services/llmService";
+import DropdownTokenSelector from "../components/DropdownTokenSelector";
 
-const MAX_MESSAGES = 50; // puedes ajustar el límite aquí
+const MAX_MESSAGES = 50;
+const AVAILABLE_TOKENS = ["BTC", "ETH", "SOL", "MATIC", "ADA", "BNB"];
 
-const ChatScreen = ({ route }) => {
-  const initialToken = route?.params?.token || "BTC";
-  const initialMode = route?.params?.mode || "lite";
-  const [token, setToken] = useState(initialToken);
+const ChatScreen = () => {
+  const [token, setToken] = useState(null);
+  const [isProMode, setIsProMode] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isProMode, setIsProMode] = useState(initialMode === "pro");
+  const [initializing, setInitializing] = useState(true);
 
   const scrollRef = useRef();
   const mode = isProMode ? "pro" : "lite";
+  const STORAGE_KEY = `advisor_history_${token?.toUpperCase()}`;
 
-  const STORAGE_KEY = `advisor_history_${token.toUpperCase()}`;
+  // Cargar ajustes del usuario
+  const loadPreferences = async () => {
+    try {
+      const savedToken = await AsyncStorage.getItem("favorite_token");
+      const savedMode = await AsyncStorage.getItem("default_mode");
+
+      setToken(savedToken || "BTC");
+      setIsProMode(savedMode === "pro");
+    } catch (e) {
+      console.warn("❌ Error cargando preferencias:", e);
+      setToken("BTC");
+      setIsProMode(false);
+    } finally {
+      setInitializing(false);
+    }
+  };
 
   const saveHistory = async (data) => {
     try {
@@ -44,13 +63,14 @@ const ChatScreen = ({ route }) => {
     try {
       const saved = await AsyncStorage.getItem(STORAGE_KEY);
       if (saved) setHistory(JSON.parse(saved));
+      else setHistory([]);
     } catch (e) {
       console.warn("❌ Error cargando historial:", e);
     }
   };
 
   const handleSend = async () => {
-    if (!prompt.trim() || !token.trim()) return;
+    if (!prompt.trim() || !token?.trim()) return;
 
     const newUserMessage = {
       sender: "user",
@@ -95,16 +115,31 @@ const ChatScreen = ({ route }) => {
   };
 
   useEffect(() => {
+    loadPreferences();
+  }, []);
+
+  useEffect(() => {
+    if (!token || initializing) return;
+    if (mode === "advisor") {
+      loadHistory();
+    } else {
+      setHistory([]);
+    }
+  }, [mode, token]);
+
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollToEnd({ animated: true });
     }
   }, [history]);
 
-  useEffect(() => {
-    if (mode === "advisor") {
-      loadHistory();
-    }
-  }, [mode, token]);
+  if (initializing || !token) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#007aff" />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -112,88 +147,72 @@ const ChatScreen = ({ route }) => {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={100}
     >
-      <View style={{ flex: 1 }}>
-        <View style={styles.headerContainer}>
-          <Text style={styles.header}>LLM SignalBot</Text>
-          <View style={styles.modeToggle}>
-            <Text style={styles.modeText}>{isProMode ? "PRO" : "LITE"} Mode</Text>
-            <Switch
-              value={isProMode}
-              onValueChange={setIsProMode}
-              trackColor={{ false: "#ccc", true: "#81d4fa" }}
-              thumbColor={isProMode ? "#007aff" : "#eee"}
-            />
-          </View>
-        </View>
-
-        <View style={styles.tokenContainer}>
-          <Text style={styles.tokenLabel}>Token:</Text>
-          <TextInput
-            style={styles.tokenInput}
-            placeholder="Ej: BTC, ETH"
-            value={token}
-            onChangeText={setToken}
-          />
-        </View>
-
-        <ScrollView style={styles.history} ref={scrollRef}>
-          {history.map((msg, index) => (
-            <View
-              key={index}
-              style={[
-                styles.messageBubble,
-                msg.sender === "user"
-                  ? styles.userBubble
-                  : styles.botBubble,
-              ]}
-            >
-              <Text style={styles.modeTag}>
-                {msg.sender === "user" ? "Tú" : "elBot"} | Modo:{" "}
-                {msg.mode.toUpperCase()}
-              </Text>
-              {msg.sender === "user" ? (
-                <Text style={styles.userText}>{msg.text}</Text>
-              ) : (
-                <Markdown style={markdownStyles}>{msg.text}</Markdown>
-              )}
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={{ flex: 1 }}>
+          <View style={styles.headerContainer}>
+            <Text style={styles.header}>LLM SignalBot</Text>
+            <View style={styles.modeToggle}>
+              <Text style={styles.modeText}>{isProMode ? "PRO" : "LITE"} Mode</Text>
+              <Switch
+                value={isProMode}
+                onValueChange={setIsProMode}
+                trackColor={{ false: "#ccc", true: "#81d4fa" }}
+                thumbColor={isProMode ? "#007aff" : "#eee"}
+              />
             </View>
-          ))}
-          {loading && (
-            <ActivityIndicator
-              size="small"
-              color="#007aff"
-              style={{ marginTop: 10 }}
-            />
-          )}
-        </ScrollView>
+          </View>
 
-        <TextInput
-          style={styles.promptInput}
-          placeholder="¿Qué deseas preguntar?"
-          value={prompt}
-          onChangeText={setPrompt}
-          multiline
-        />
+          <DropdownTokenSelector token={token} setToken={setToken} tokens={AVAILABLE_TOKENS} />
 
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            { backgroundColor: loading || !prompt.trim() ? "#ccc" : "#007aff" },
-          ]}
-          onPress={handleSend}
-          disabled={loading || !prompt.trim()}
-        >
-          <Text style={styles.sendButtonText}>
-            {loading ? "Enviando..." : "Enviar"}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <ScrollView style={styles.history} ref={scrollRef}>
+            {history.map((msg, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.messageBubble,
+                  msg.sender === "user" ? styles.userBubble : styles.botBubble,
+                ]}
+              >
+                <Text style={styles.modeTag}>
+                  {msg.sender === "user" ? "Tú" : "elBot"} | Modo: {msg.mode.toUpperCase()}
+                </Text>
+                {msg.sender === "user" ? (
+                  <Text style={styles.userText}>{msg.text}</Text>
+                ) : (
+                  <Markdown style={markdownStyles}>{msg.text}</Markdown>
+                )}
+              </View>
+            ))}
+            {loading && <ActivityIndicator size="small" color="#007aff" style={{ marginTop: 10 }} />}
+          </ScrollView>
+
+          <TextInput
+            style={styles.promptInput}
+            placeholder="¿Qué deseas preguntar?"
+            value={prompt}
+            onChangeText={setPrompt}
+            multiline
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              { backgroundColor: loading || !prompt.trim() ? "#ccc" : "#007aff" },
+            ]}
+            onPress={handleSend}
+            disabled={loading || !prompt.trim()}
+          >
+            <Text style={styles.sendButtonText}>{loading ? "Enviando..." : "Enviar"}</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 };
 
 export default ChatScreen;
 
+// ✅ Tus estilos siguen igual
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -217,23 +236,6 @@ const styles = StyleSheet.create({
     marginRight: 8,
     fontSize: 14,
     fontWeight: "500",
-  },
-  tokenContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
-  tokenLabel: {
-    marginRight: 8,
-    fontWeight: "600",
-  },
-  tokenInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 6,
-    padding: 8,
   },
   history: {
     flex: 1,
