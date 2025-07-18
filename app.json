@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "SignalBot",
+    "slug": "llm-signalbot",
+    "version": "0.5.0",
+    "orientation": "portrait",
+    "platforms": [
+      "android"
+    ],
+    "sdkVersion": "49.0.0",
+    "android": {
+      "package": "com.lukydev.llmsignalbot",
+      "versionCode": 5
+    },
+    "extra": {
+      "eas": {
+        "projectId": "540e2d10-1f77-4252-b3c0-7d2afb7332c0"
+      }
+    }
+  }
+}
