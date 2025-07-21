@@ -1,27 +1,59 @@
-# Node & Expo
+# --- Node / React Native / Expo ---
 node_modules/
 .expo/
 .expo-shared/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
 
-# Python
-__pycache__/
-*.pyc
+# --- Android APK / builds ---
+*.apk
+*.aab
+*.ipa
+build/
+dist/
+android/app/build/
+ios/build/
+
+# --- Environment / Secrets ---
 .env
+.env.*
+*.key
+*.pem
 
-# Logs
-logs/*.csv
-logs/*.log
+# --- Python backend ---
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.db
+*.pkl
+*.bak
 
-# IDEs
+# --- Logs / Outputs ---
+logs/
+*.log
+*.csv
+
+# --- IDEs / Editors ---
 .vscode/
 .idea/
+*.sublime-workspace
+*.sublime-project
 
-# Build artifacts
-*.apk
-*.zip
-dist/
-build/
-
-# OS
+# --- OS Junk ---
 .DS_Store
 Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# --- Expo / Metro cache ---
+babel.config.js
+metro.config.js
+
+# --- Optional: macOS system files or others ---
+*.swp
+*.tmp
+
+# --- Git ---
+*.orig
