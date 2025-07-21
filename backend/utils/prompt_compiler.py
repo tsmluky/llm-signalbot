@@ -2,15 +2,17 @@
 
 import importlib
 import logging
-from backend.utils import format_prompt_lite, format_prompt, format_prompt_assist
+
+# Modularizado por modo
+from backend.utils import format_prompt_lite, format_prompt_pro, format_prompt_assist
 
 logger = logging.getLogger(__name__)
 
 def compile_prompt(mode: str, token: str, user_message: str, market_data: dict) -> str:
     """
     Compila el prompt combinando:
-    - Prompt base (Lite, Pro, Advisor)
-    - Contexto específico del token (si existe)
+    - Prompt base (según modo)
+    - Contexto específico del token
     """
     token = token.lower().strip()
     context = _load_token_context(token)
@@ -19,36 +21,40 @@ def compile_prompt(mode: str, token: str, user_message: str, market_data: dict) 
         if mode == "lite":
             prompt_core = format_prompt_lite.build_prompt(token, user_message, market_data)
         elif mode == "pro":
-            prompt_core = format_prompt.build_prompt(token, user_message, market_data)
+            prompt_core = format_prompt_pro.build_prompt(token, user_message, market_data)
         elif mode == "advisor":
             prompt_core = format_prompt_assist.build_prompt(token, user_message, market_data)
         else:
-            raise ValueError(f"Modo desconocido: {mode}")
+            raise ValueError(f"[❌ Modo inválido] '{mode}' no es un modo válido.")
     except Exception as e:
-        logger.error(f"[❌ Prompt base] Error al generar prompt para modo '{mode}': {e}")
-        prompt_core = f"[⚠️ Error al generar prompt base para {token.upper()} en modo {mode.upper()}]"
+        logger.error(f"[❌ Error al generar prompt base para modo '{mode}']: {e}")
+        prompt_core = f"[⚠️ Error generando prompt para {token.upper()} en modo {mode.upper()}]"
 
-    return "\n\n".join(filter(None, [context.strip(), prompt_core.strip()]))
+    full_prompt = "\n\n".join(filter(None, [context.strip(), prompt_core.strip()]))
+
+    logger.debug(f"[🧠 Prompt final generado ({len(full_prompt)} chars)]")
+    return full_prompt
+
 
 def _load_token_context(token: str) -> str:
     """
-    Intenta importar un archivo de contexto específico para el token.
-    Fallback a default si no existe.
+    Intenta importar un módulo de contexto específico del token.
+    Fallback: `default.py` si no existe.
     """
     try:
         module_path = f"backend.utils.tokens.{token}"
         token_module = importlib.import_module(module_path)
     except ModuleNotFoundError:
-        logger.debug(f"[ℹ️ Contexto] No hay archivo para el token '{token}', se usará 'default.py'")
+        logger.debug(f"[ℹ️ Token '{token}']: no se encontró archivo, usando 'default.py'")
         module_path = "backend.utils.tokens.default"
         token_module = importlib.import_module(module_path)
     except Exception as e:
-        logger.warning(f"[⚠️ Error al importar contexto de {token}]: {e}")
+        logger.warning(f"[⚠️ Error cargando contexto para {token}]: {e}")
         return ""
 
     get_ctx = getattr(token_module, "get_context", None)
     if callable(get_ctx):
         return get_ctx()
     else:
-        logger.debug(f"[ℹ️ Contexto] El módulo '{token}' no tiene función 'get_context'.")
+        logger.debug(f"[ℹ️ '{token}']: el módulo no contiene función 'get_context'")
         return ""

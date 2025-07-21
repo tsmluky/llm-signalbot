@@ -1,6 +1,10 @@
+# backend/utils/format_prompt_pro.py
+
 from datetime import datetime
 import pytz
 import importlib
+
+print("🟢 NUEVO PROMPT_PRO ACTIVADO")
 
 def build_prompt(token: str, user_message: str, market_data: dict) -> str:
     timezone = pytz.timezone("Europe/Madrid")
@@ -14,7 +18,6 @@ def build_prompt(token: str, user_message: str, market_data: dict) -> str:
     cap = market_data.get("market_cap", "N/D")
     sentiment = market_data.get("sentiment", "neutral")
 
-    # Cargar contexto del token desde utils.tokens
     try:
         context_module = importlib.import_module(f"backend.utils.tokens.{token.lower()}")
         context = context_module.get_context()
@@ -22,8 +25,8 @@ def build_prompt(token: str, user_message: str, market_data: dict) -> str:
         from backend.utils.tokens.default import get_context
         context = get_context()
 
-    return f"""
-#PRO_PROMPT_V3
+    return f"""#PRO_PROMPT_V3
+
 #INPUT_DATA
 TOKEN: {token.upper()}
 DATE: {now_str}
@@ -34,41 +37,36 @@ MARKET_CAP: {cap}
 SENTIMENT: {sentiment}
 
 #USER_QUERY
-“{message}”
+"{message}"
 
 #CONTEXT
 {context}
 
-#EVAL_INSTRUCTIONS
-[CTXT]: contexto técnico global actual.
-[TA]: indicadores clave (RSI, EMAs, MACD, Volumen, Soportes/Resistencias).
-[PLAN]: estrategia operativa sugerida según escenario.
-[INSIGHT]: comentario profesional final, directo y analítico.
-[PARAMS]: acción sugerida, confianza, riesgo, TP, SL y timeframe.
-
-#OUTPUT_FORMAT
-Responde exclusivamente dentro de #ANALYSIS_START y #ANALYSIS_END.
-Respeta este orden estructural y usa un tono de analista profesional.
-
+#EXAMPLE_OUTPUT
 #ANALYSIS_START
-[CTXT]:
-…
 
-[TA]:
-…
+#CTXT#
+BTC cotiza en $118K, con volumen moderado y contexto post-halving. ETFs e instituciones siguen influyendo en la narrativa de acumulación. Resistencia clave en $125K.
 
-[PLAN]:
-…
+#TA#
+- RSI: 55 (neutral)
+- EMAs: EMA200 ($115K) como soporte estructural. EMA50 ($120K) como resistencia inmediata.
+- MACD: Señal bajista débil.
+- Volumen: Decreciente en rallies. Falta de convicción institucional.
+- Soporte: $112K. Resistencia: $125K.
 
-[INSIGHT]:
-…
+#PLAN#
+1. Alcista: romper $125K con volumen alto → LONG hasta $135K  
+2. Bajista: perder $112K → SHORT hasta $105K  
+3. Lateral: consolidación entre $112K-$125K → esperar confirmación
 
-[PARAMS]:
-[ACTION]: LONG / SHORT / ESPERAR
-[CONFIDENCE]: XX%
-[RISK]: X/10
-[TP]: $XXX
-[SL]: $XXX
-[TIMEFRAME]: 24h u otrou
+#INSIGHT#
+BTC sigue en fase de acumulación, pero sin fuerza compradora clara. ETFs y tasas de interés son claves. Solo operar ruptura con volumen.
+
+#PARAMS#
+[ACTION]: ESPERAR  
+[CONFIDENCE]: 72%  
+[RISK]: 6.3 / 10
+
 #ANALYSIS_END
 """

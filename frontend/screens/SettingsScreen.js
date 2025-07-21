@@ -1,3 +1,4 @@
+// screens/SettingsScreen.js
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -7,7 +8,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Picker } from "@react-native-picker/picker"; // ✅ FIX IMPORT
+import { Picker } from "@react-native-picker/picker";
 
 const AVAILABLE_TOKENS = ["BTC", "ETH", "SOL", "MATIC", "ADA", "BNB"];
 
@@ -70,6 +71,8 @@ export default function SettingsScreen() {
           <Switch
             value={defaultMode === "pro"}
             onValueChange={(val) => setDefaultMode(val ? "pro" : "lite")}
+            trackColor={{ false: "#ccc", true: "#81d4fa" }}
+            thumbColor={defaultMode === "pro" ? "#007aff" : "#eee"}
           />
           <Text style={styles.option}>PRO</Text>
         </View>
@@ -82,6 +85,8 @@ export default function SettingsScreen() {
             selectedValue={favoriteToken}
             onValueChange={setFavoriteToken}
             style={styles.picker}
+            dropdownIconColor="#007aff"
+            mode="dropdown"
           >
             {AVAILABLE_TOKENS.map((token) => (
               <Picker.Item key={token} label={token} value={token} />
@@ -116,7 +121,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   setting: {
-    marginBottom: 24,
+    marginBottom: 28,
   },
   label: {
     fontSize: 16,
@@ -139,7 +144,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   picker: {
-    height: 40,
+    height: 44,
     width: "100%",
   },
 });

@@ -1,13 +1,11 @@
-# main.py
-
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from pathlib import Path
-from collections import Counter
 import logging
-import csv
+import re
+from datetime import datetime
+import pytz
 
 from backend.deepseek_client import get_response_from_llm
 from backend.market_data import get_market_data
@@ -48,6 +46,41 @@ def is_valid_response(mode: str, response: str) -> bool:
         return len(response.strip()) > 50
     return False
 
+# 🧾 Conversión robusta a markdown visual
+def transform_pro_response_to_markdown(text: str) -> str:
+    try:
+        raw = text.strip()
+        raw = raw.replace("#ANALYSIS_START", "").replace("#ANALYSIS_END", "")
+
+        blocks = {
+            "CTXT": {"title": "🌐 Contexto", "content": ""},
+            "TA": {"title": "📊 Análisis Técnico", "content": ""},
+            "PLAN": {"title": "📅 Plan de Acción", "content": ""},
+            "INSIGHT": {"title": "🧠 Insight", "content": ""},
+            "PARAMS": {"title": "⚙️ Parámetros", "content": ""}
+        }
+
+        current = None
+        for line in raw.splitlines():
+            tag_match = re.match(r"#(CTXT|TA|PLAN|INSIGHT|PARAMS)#", line.strip())
+            if tag_match:
+                current = tag_match.group(1)
+                continue
+            elif current:
+                blocks[current]["content"] += line + "\n"
+
+        result = ""
+        for key in ["CTXT", "TA", "PLAN", "INSIGHT", "PARAMS"]:
+            content = blocks[key]["content"].strip()
+            if content:
+                result += f"## {blocks[key]['title']}\n\n{content}\n\n"
+
+        return result.strip()
+
+    except Exception as e:
+        logger.warning(f"[⚠️ Error al convertir a markdown]: {e}")
+        return text
+
 # 🔍 Endpoint principal de análisis
 @app.post("/analyze")
 async def analyze_token(req: AnalysisRequest):
@@ -71,6 +104,9 @@ async def analyze_token(req: AnalysisRequest):
 
         # 📡 Llamada al modelo
         response = await get_response_from_llm(prompt)
+        print("debug response:", response)
+        logger.warning(f"[🧪 RESPUESTA BRUTA DEL MODELO]:\n{response}")
+        logger.warning(f"[📨 PROMPT ENVIADO]:\n{prompt}")
 
         if not is_valid_response(mode, response):
             logger.warning(f"⚠️ Prompt enviado:\n{prompt}")
@@ -79,8 +115,11 @@ async def analyze_token(req: AnalysisRequest):
 
         logger.info("✅ Respuesta recibida del LLM.")
 
-        # 📝 Logging por modo
+        # 📝 Logging por modo + inyección de precio si es LITE
         if mode == "lite":
+            if "#SIGNAL_END" in response:
+                price_line = f"[PRICE]: ${float(price):.4f}  \n"
+                response = response.replace("#SIGNAL_END", price_line + "#SIGNAL_END")
             log_lite_signal(token, float(price), prompt, response)
             logger.info("📝 Señal Lite registrada en logs.")
         elif mode == "pro":
@@ -91,12 +130,23 @@ async def analyze_token(req: AnalysisRequest):
             log_advisor_session(token, req.message, response)
             logger.info("💬 Interacción Advisor y sesión registrada en logs.")
 
+        # 🧾 Markdown estructurado para modo PRO
+        if mode == "pro":
+            markdown_response = transform_pro_response_to_markdown(response)
+        else:
+            markdown_response = response
+
+        # 🕒 Timestamp
+        timezone = pytz.timezone("Europe/Madrid")
+        timestamp = datetime.now(timezone).isoformat()
+
         return {
             "status": "ok",
             "mode": mode,
             "token": token,
-            "analysis": response,
-            "prompt": prompt
+            "analysis": markdown_response,
+            "prompt": prompt,
+            "timestamp": timestamp
         }
 
     except Exception as e:
@@ -110,112 +160,3 @@ async def analyze_token(req: AnalysisRequest):
                 "details": str(e)
             }
         )
-
-# 📄 Devuelve todas las señales guardadas en modo Lite
-@app.get("/signals_lite")
-@app.get("/signals_lite")
-def get_signals_lite():
-    log_path = Path("logs/signals_lite.csv")
-    if not log_path.exists():
-        return []
-
-    try:
-        with log_path.open(newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-
-        # Ordenar por timestamp descendente (más reciente primero)
-        rows.sort(key=lambda x: x["timestamp"], reverse=True)
-        return {
-            "status": "ok",
-            "total": len(rows),
-            "signals": rows
-        }
-
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": "Error al leer señales Lite.",
-                "details": str(e)
-            }
-        )
-
-# 📊 Estadísticas resumidas del modo Lite
-@app.get("/stats_lite")
-def get_lite_stats():
-    def parse_risk_value(risk_str: str) -> float:
-        try:
-            if "/" in risk_str:
-                num, denom = risk_str.split("/")
-                return float(num) / float(denom) * 10
-            return float(risk_str)
-        except:
-            return 0.0
-
-    try:
-        log_file = Path("logs/signals_lite.csv")
-        if not log_file.exists():
-            return {"status": "ok", "stats": {}}
-
-        with log_file.open("r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-
-        total = len(rows)
-        if total == 0:
-            return {"status": "ok", "stats": {}}
-
-        actions = Counter(row["action"] for row in rows)
-        avg_confidence = sum(int(row["confidence"]) for row in rows if row["confidence"]) / total
-        avg_risk = sum(parse_risk_value(row["risk"]) for row in rows if row["risk"]) / total
-
-        return {
-            "status": "ok",
-            "stats": {
-                "total_signals": total,
-                "long_count": actions.get("LONG", 0),
-                "short_count": actions.get("SHORT", 0),
-                "wait_count": actions.get("ESPERAR", 0),
-                "avg_confidence": round(avg_confidence, 2),
-                "avg_risk": round(avg_risk, 2)
-            }
-        }
-
-    except Exception as e:
-        logger.error(f"[❌ Error en /stats_lite] {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": "No se pudieron calcular las estadísticas.",
-                "details": str(e)
-            }
-        )
-
-# 🧠 Historial de conversaciones modo advisor
-@app.get("/session_history/{token}")
-def get_advisor_session(token: str):
-    session_file = Path(f"logs/sessions/{token.upper()}.csv")
-    if not session_file.exists():
-        return JSONResponse(status_code=404, content={"status": "error", "message": "No hay conversaciones para este token."})
-
-    try:
-        with session_file.open("r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            history = list(reader)
-
-        return {
-            "status": "ok",
-            "token": token.upper(),
-            "history": history
-        }
-
-    except Exception as e:
-        logger.error(f"[❌ Error al leer sesión de {token}]: {str(e)}")
-        return JSONResponse(status_code=500, content={
-            "status": "error",
-            "message": "Error al leer el historial.",
-            "details": str(e)
-        })

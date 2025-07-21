@@ -24,8 +24,9 @@ if API_KEY.startswith("TU_API_KEY"):
     logging.critical("❌ DEEPSEEK_API_KEY parece ser un placeholder. Reemplázala por una clave válida.")
     exit(1)
 
-async def get_response_from_llm(prompt: str, system_message: str = "Eres un analista técnico experto en criptomonedas.") -> str:
+async def get_response_from_llm(prompt: str, system_message: str = "Eres un analista técnico experto en criptomonedas, tienes que respetar la estructura y devolver una idea clara.") -> str:
     headers = {
+        
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
     }
@@ -36,8 +37,10 @@ async def get_response_from_llm(prompt: str, system_message: str = "Eres un anal
             {"role": "system", "content": system_message},
             {"role": "user", "content": prompt}
         ],
-        "temperature": 0.7,
-        "max_tokens": 2500
+        "temperature": 0.9,
+        "max_tokens": 7000,
+        "top_p": 1.0,
+        "presence_penalty": 0.3
     }
 
     logging.info("🧠 Prompt enviado a DeepSeek: %s", prompt)
