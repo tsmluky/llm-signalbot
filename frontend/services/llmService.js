@@ -17,9 +17,36 @@ export async function getLLMResponse(prompt, token, mode = "lite") {
       throw new Error(`❌ No se pudo generar el análisis. ${msg}`);
     }
 
-    return data.analysis;
+    const analysis = data.analysis;
+    if (!analysis || typeof analysis !== "string" || analysis.trim() === "") {
+      console.warn("⚠️ El campo 'analysis' está vacío o malformado.");
+      return {
+        status: "error",
+        analysis: "❌ El modelo no devolvió contenido útil.",
+        token,
+        mode,
+        prompt,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    return {
+      status: "ok",
+      analysis,
+      token: data.token || token,
+      mode: data.mode || mode,
+      prompt: data.prompt || prompt,
+      timestamp: data.timestamp || new Date().toISOString(),
+    };
   } catch (error) {
-    console.error("Error en getLLMResponse:", error);
-    throw error;
+    console.error("❌ Error en getLLMResponse:", error);
+    return {
+      status: "error",
+      analysis: "❌ Error inesperado al generar el análisis.",
+      token,
+      mode,
+      prompt,
+      timestamp: new Date().toISOString(),
+    };
   }
 }

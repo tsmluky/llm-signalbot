@@ -93,10 +93,15 @@ const ChatScreen = () => {
     setLoading(true);
 
     try {
-      const response = await getLLMResponse(prompt, token, mode);
+      const res = await getLLMResponse(prompt, token, mode);
+console.log("📨 RESPUESTA RAW:", res);
+console.log("📨 ANALYSIS:", res.analysis);
+
+const analysis = res.analysis || "❌ No se pudo generar el análisis.";;
+
       const botMessage = {
         sender: "bot",
-        text: response || "❌ No se pudo generar el análisis.",
+        text: analysis,
         mode,
         timestamp: new Date().toISOString(),
       };
@@ -105,6 +110,7 @@ const ChatScreen = () => {
       setHistory(finalHistory);
       await saveHistory(finalHistory);
     } catch (err) {
+      console.warn("❌ Error al generar respuesta:", err);
       setHistory((prev) => [
         ...prev,
         {
@@ -139,7 +145,7 @@ const ChatScreen = () => {
         )}
 
         {isBot && isLite && (
-          <SignalCard content={item.text || ""} timestamp={(item.timestamp)} />
+          <SignalCard content={item.text || ""} timestamp={item.timestamp} />
         )}
       </View>
     );

@@ -15,11 +15,9 @@ from backend.utils.session_logger import log_advisor_session
 
 app = FastAPI()
 
-# 🛡️ Logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("signalbot")
 
-# 🌐 CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,68 +26,75 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 📥 Request Model
 class AnalysisRequest(BaseModel):
     token: str
     message: str
-    mode: str = "pro"  # 'lite' | 'pro' | 'advisor'
+    mode: str = "pro"
 
-# ✅ Validación inteligente por modo
 def is_valid_response(mode: str, response: str) -> bool:
     if not response or "❌" in response:
         return False
+    response = response.strip()
+
     if mode == "lite":
         return "#SIGNAL_START" in response and "#SIGNAL_END" in response
+
     elif mode == "pro":
-        return "#ANALYSIS_START" in response and "#ANALYSIS_END" in response
+        if "#ANALYSIS_START" in response and "#ANALYSIS_END" in response:
+            try:
+                content = response.split("#ANALYSIS_START", 1)[1].split("#ANALYSIS_END", 1)[0].strip()
+                return len(content) > 100
+            except Exception:
+                return False
+        else:
+            # aceptar respuestas libres si tienen contenido sustancial
+            return len(response) > 300 and ("ETH" in response.upper() or "Ethereum" in response)
+
     elif mode == "advisor":
         return len(response.strip()) > 50
+
     return False
 
-# 🧾 Conversión robusta a markdown visual
-def transform_pro_response_to_markdown(text: str) -> str:
+def build_markdown_from_analysis(text: str) -> str:
     try:
-        raw = text.strip()
-        raw = raw.replace("#ANALYSIS_START", "").replace("#ANALYSIS_END", "")
-
-        blocks = {
-            "CTXT": {"title": "🌐 Contexto", "content": ""},
-            "TA": {"title": "📊 Análisis Técnico", "content": ""},
-            "PLAN": {"title": "📅 Plan de Acción", "content": ""},
-            "INSIGHT": {"title": "🧠 Insight", "content": ""},
-            "PARAMS": {"title": "⚙️ Parámetros", "content": ""}
+        raw = text.strip().replace("#ANALYSIS_START", "").replace("#ANALYSIS_END", "")
+        sections = {
+            "CTXT": "🌐 Contexto",
+            "TA": "📊 Análisis Técnico",
+            "PLAN": "📅 Plan de Acción",
+            "INSIGHT": "🧠 Insight",
+            "PARAMS": "⚙️ Parámetros"
         }
-
-        current = None
+        current_section = None
+        parsed = {k: "" for k in sections}
         for line in raw.splitlines():
-            tag_match = re.match(r"#(CTXT|TA|PLAN|INSIGHT|PARAMS)#", line.strip())
-            if tag_match:
-                current = tag_match.group(1)
+            tag = re.match(r"#(CTXT|TA|PLAN|INSIGHT|PARAMS)#", line.strip())
+            if tag:
+                current_section = tag.group(1)
                 continue
-            elif current:
-                blocks[current]["content"] += line + "\n"
+            elif current_section:
+                parsed[current_section] += line + "\n"
 
-        result = ""
-        for key in ["CTXT", "TA", "PLAN", "INSIGHT", "PARAMS"]:
-            content = blocks[key]["content"].strip()
+        markdown = ""
+        for key, title in sections.items():
+            content = parsed[key].strip()
             if content:
-                result += f"## {blocks[key]['title']}\n\n{content}\n\n"
+                markdown += f"## {title}\n\n{content}\n\n"
 
-        return result.strip()
-
+        return markdown.strip()
     except Exception as e:
-        logger.warning(f"[⚠️ Error al convertir a markdown]: {e}")
-        return text
+        logger.warning(f"[⚠️ Error al formatear análisis PRO]: {e}")
+        return "⚠️ Error al formatear análisis técnico. Intenta nuevamente."
 
-# 🔍 Endpoint principal de análisis
 @app.post("/analyze")
 async def analyze_token(req: AnalysisRequest):
     try:
-        if not isinstance(req.message, str) or not isinstance(req.token, str):
-            raise ValueError("El mensaje y el token deben ser strings.")
-
         token = req.token.upper().strip()
         mode = req.mode.lower().strip()
+        message = req.message.strip()
+
+        if not token or not message:
+            raise ValueError("Token y mensaje son obligatorios.")
 
         market_data = get_market_data(token.lower())
         price = market_data.get("price")
@@ -97,66 +102,72 @@ async def analyze_token(req: AnalysisRequest):
         if not market_data or price is None or str(price).lower() in ["nan", "n/d", ""]:
             raise ValueError(f"No se pudo obtener información válida del token '{token}'.")
 
-        # 🧠 Compilación del prompt
-        prompt = compile_prompt(mode=mode, token=token, user_message=req.message, market_data=market_data)
-        logger.info(f"[🧠 Prompt generado] Modo: {mode.upper()} | Token: {token}")
-        logger.debug(f"[🧾 Prompt completo ({len(prompt)} chars)]:\n{prompt}")
+        prompt = compile_prompt(mode=mode, token=token, user_message=message, market_data=market_data)
+        logger.info(f"[🧠 Prompt generado] [{mode.upper()}] {token}")
+        print("📤 PROMPT COMPLETO:\n", prompt)
 
-        # 📡 Llamada al modelo
         response = await get_response_from_llm(prompt)
-        print("debug response:", response)
-        logger.warning(f"[🧪 RESPUESTA BRUTA DEL MODELO]:\n{response}")
-        logger.warning(f"[📨 PROMPT ENVIADO]:\n{prompt}")
+        logger.info(f"[📨 Respuesta LLM recibida]")
+        print("[📨 RAW LLM RESPONSE]:", response)
 
         if not is_valid_response(mode, response):
-            logger.warning(f"⚠️ Prompt enviado:\n{prompt}")
-            logger.warning(f"⚠️ Respuesta inválida o incompleta (modo: {mode}):\n{response}")
-            raise RuntimeError("El modelo no devolvió una respuesta válida o estructurada.")
+            logger.warning(f"[❌ Respuesta inválida] Modo: {mode} | Token: {token}")
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "error",
+                    "analysis": "❌ El modelo no devolvió contenido útil.",
+                    "token": token,
+                    "mode": mode,
+                    "prompt": prompt,
+                    "raw_response": response,
+                    "timestamp": datetime.now(pytz.timezone("Europe/Madrid")).isoformat()
+                }
+            )
 
-        logger.info("✅ Respuesta recibida del LLM.")
-
-        # 📝 Logging por modo + inyección de precio si es LITE
+        # Logging por modo
         if mode == "lite":
             if "#SIGNAL_END" in response:
                 price_line = f"[PRICE]: ${float(price):.4f}  \n"
                 response = response.replace("#SIGNAL_END", price_line + "#SIGNAL_END")
             log_lite_signal(token, float(price), prompt, response)
-            logger.info("📝 Señal Lite registrada en logs.")
+            logger.info("📝 Señal LITE registrada.")
+
         elif mode == "pro":
             log_pro_signal(token, float(price), prompt, response)
-            logger.info("📊 Señal Pro registrada en logs.")
+            logger.info("📊 Señal PRO registrada.")
+
         elif mode == "advisor":
-            log_advisor_interaction(token, req.message, response, prompt)
-            log_advisor_session(token, req.message, response)
-            logger.info("💬 Interacción Advisor y sesión registrada en logs.")
+            log_advisor_interaction(token, message, response, prompt)
+            log_advisor_session(token, message, response)
+            logger.info("💬 Interacción ADVISOR registrada.")
 
-        # 🧾 Markdown estructurado para modo PRO
+        # Formato final de respuesta
         if mode == "pro":
-            markdown_response = transform_pro_response_to_markdown(response)
+            if "#ANALYSIS_START" in response and "#ANALYSIS_END" in response:
+                formatted_response = build_markdown_from_analysis(response)
+            else:
+                formatted_response = response
         else:
-            markdown_response = response
-
-        # 🕒 Timestamp
-        timezone = pytz.timezone("Europe/Madrid")
-        timestamp = datetime.now(timezone).isoformat()
+            formatted_response = response
 
         return {
             "status": "ok",
             "mode": mode,
             "token": token,
-            "analysis": markdown_response,
+            "analysis": formatted_response,
             "prompt": prompt,
-            "timestamp": timestamp
+            "timestamp": datetime.now(pytz.timezone("Europe/Madrid")).isoformat()
         }
 
     except Exception as e:
         logger.error(f"[❌ Error] {str(e)}")
-        status_code = 400 if isinstance(e, ValueError) else 500
         return JSONResponse(
-            status_code=status_code,
+            status_code=400 if isinstance(e, ValueError) else 500,
             content={
                 "status": "error",
                 "message": "No se pudo completar el análisis.",
-                "details": str(e)
+                "details": str(e),
+                "analysis": "❌ Error interno. Intenta de nuevo más tarde."
             }
         )

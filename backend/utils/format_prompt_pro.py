@@ -1,72 +1,35 @@
-# backend/utils/format_prompt_pro.py
+# backend/utils/format_prompt_pro_flexible.py
 
 from datetime import datetime
 import pytz
-import importlib
 
-print("🟢 NUEVO PROMPT_PRO ACTIVADO")
-
-def build_prompt(token: str, user_message: str, market_data: dict) -> str:
+def build_prompt(token: str, user_message: str, market_data: dict, brain_context: str = "") -> str:
     timezone = pytz.timezone("Europe/Madrid")
     now_str = datetime.now(timezone).strftime("%Y-%m-%d %H:%M:%S %Z")
 
-    message = user_message.strip() if user_message.strip() else "Sin consulta específica. Analiza normalmente."
-
     price = market_data.get("price", "N/D")
-    change = market_data.get("change_24h", "N/D")
-    volume = market_data.get("volume_24h", "N/D")
-    cap = market_data.get("market_cap", "N/D")
+    volume_24h = market_data.get("volume_24h", "N/D")
+    change_24h = market_data.get("change_24h", "N/D")
+    market_cap = market_data.get("market_cap", "N/D")
     sentiment = market_data.get("sentiment", "neutral")
 
-    try:
-        context_module = importlib.import_module(f"backend.utils.tokens.{token.lower()}")
-        context = context_module.get_context()
-    except Exception:
-        from backend.utils.tokens.default import get_context
-        context = get_context()
+    return f"""Eres un analista profesional de mercados cripto. Quiero que analices de forma detallada la situación actual del token {token.upper()}.
 
-    return f"""#PRO_PROMPT_V3
+Basándote en los siguientes datos de mercado y contexto, ofrece un análisis técnico y narrativo que ayude a tomar decisiones informadas. No utilices estructuras rígidas ni bloques marcados. Escribe como si redactaras un informe breve para otro analista.
 
-#INPUT_DATA
-TOKEN: {token.upper()}
-DATE: {now_str}
-PRICE: {price}
-CHANGE_24H: {change}%
-VOLUME_24H: {volume}
-MARKET_CAP: {cap}
-SENTIMENT: {sentiment}
+Fecha actual: {now_str}
+Token: {token.upper()}
+Precio actual: {price}
+Cambio 24h: {change_24h}%
+Volumen 24h: {volume_24h}
+Capitalización de mercado: {market_cap}
+Sentimiento general: {sentiment}
 
-#USER_QUERY
-"{message}"
+Contexto adicional:
+{brain_context.strip() or "Sin contexto disponible."}
 
-#CONTEXT
-{context}
+Consulta del usuario:
+{user_message.strip()}
 
-#EXAMPLE_OUTPUT
-#ANALYSIS_START
-
-#CTXT#
-BTC cotiza en $118K, con volumen moderado y contexto post-halving. ETFs e instituciones siguen influyendo en la narrativa de acumulación. Resistencia clave en $125K.
-
-#TA#
-- RSI: 55 (neutral)
-- EMAs: EMA200 ($115K) como soporte estructural. EMA50 ($120K) como resistencia inmediata.
-- MACD: Señal bajista débil.
-- Volumen: Decreciente en rallies. Falta de convicción institucional.
-- Soporte: $112K. Resistencia: $125K.
-
-#PLAN#
-1. Alcista: romper $125K con volumen alto → LONG hasta $135K  
-2. Bajista: perder $112K → SHORT hasta $105K  
-3. Lateral: consolidación entre $112K-$125K → esperar confirmación
-
-#INSIGHT#
-BTC sigue en fase de acumulación, pero sin fuerza compradora clara. ETFs y tasas de interés son claves. Solo operar ruptura con volumen.
-
-#PARAMS#
-[ACTION]: ESPERAR  
-[CONFIDENCE]: 72%  
-[RISK]: 6.3 / 10
-
-#ANALYSIS_END
+Escribe directamente tu análisis completo a continuación:
 """

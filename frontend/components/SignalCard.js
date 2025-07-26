@@ -45,7 +45,6 @@ const formattedTime = timestamp
       hour12: false,
     })
   : "—";
-console.log("🕒 timestamp recibido:", timestamp);
 
 
   return (
