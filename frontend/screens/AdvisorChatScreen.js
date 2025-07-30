@@ -75,9 +75,10 @@ const AdvisorChatScreen = () => {
       const response = await getLLMResponse(trimmed, "BTC", "advisor");
       const botMessage = {
         sender: "bot",
-        text: response || "⚠️ Sin respuesta del modelo.",
+        text: typeof response.analysis === "string" ? response.analysis : "⚠️ Respuesta inválida del modelo.",
         timestamp: new Date().toISOString(),
       };
+
       setHistory((prev) => [...prev, botMessage]);
     } catch (err) {
       setHistory((prev) => [

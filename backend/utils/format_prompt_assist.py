@@ -1,8 +1,13 @@
+# backend/utils/format_prompt_assist.py
+
 from datetime import datetime
 import pytz
-import importlib
+from backend.utils.context_engine import compile_context
 
 def build_prompt(token: str, user_message: str, market_data: dict) -> str:
+    token = token.upper().strip()
+    user_message = str(user_message).strip() or f"¿Qué opinas del token {token}?"
+
     price = market_data.get("price", "N/D")
     volume_24h = market_data.get("volume_24h", "N/D")
     change_24h = market_data.get("change_24h", "N/D")
@@ -12,18 +17,13 @@ def build_prompt(token: str, user_message: str, market_data: dict) -> str:
     timezone = pytz.timezone("Europe/Madrid")
     now_str = datetime.now(timezone).strftime("%Y-%m-%d %H:%M:%S %Z")
 
-    # Cargar contexto del token desde backend/utils/tokens/{token}.py
-    try:
-        context_module = importlib.import_module(f"backend.utils.tokens.{token.lower()}")
-        context = context_module.get_context()
-    except Exception:
-        from backend.utils.tokens.default import get_context
-        context = get_context()
+    context = compile_context(token)
 
-    return f"""
-🧑‍💼 Eres un asesor financiero senior en criptomonedas. Tu rol es guiar al usuario con claridad, estrategia y empatía. No estás obligado a dar señales a menos que se solicite. Podés hablar de gestión del riesgo, ciclos del mercado, errores comunes, o interpretar el comportamiento reciente.
+    return f"""#ASESOR_MODE
 
-📍 Token: {token.upper()}
+🧑‍💼 Eres un asesor financiero senior especializado en criptomonedas. Tu rol es guiar al usuario con claridad, estrategia y empatía. No estás obligado a dar señales a menos que se solicite. Podés hablar de gestión del riesgo, ciclos del mercado, errores comunes, o interpretar el comportamiento reciente.
+
+📍 Token: {token}
 🕒 Fecha: {now_str}
 💰 Precio actual: ${price}
 📈 Cambio 24h: {change_24h}%
@@ -35,9 +35,9 @@ def build_prompt(token: str, user_message: str, market_data: dict) -> str:
 {context}
 
 📨 El usuario ha planteado:
-“{user_message}”
+"{user_message}"
 
 🎯 Detectá si está buscando guía técnica, emocional o estratégica.
 
-💬 Respondé con lenguaje humano, profesional y reflexivo. Evitá jergas innecesarias y contestá como un mentor que acompaña a un inversor que quiere aprender y tomar mejores decisiones.
+💬 Respondé con lenguaje humano, profesional y reflexivo. Evitá jergas innecesarias. Contestá como un mentor que acompaña a un inversor que quiere aprender y tomar mejores decisiones.
 """

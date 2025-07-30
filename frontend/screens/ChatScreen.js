@@ -94,15 +94,15 @@ const ChatScreen = () => {
 
     try {
       const res = await getLLMResponse(prompt, token, mode);
-console.log("📨 RESPUESTA RAW:", res);
-console.log("📨 ANALYSIS:", res.analysis);
+      console.log("📨 RESPUESTA RAW:", res);
+      console.log("📨 ANALYSIS:", res.analysis);
 
-const analysis = res.analysis || "❌ No se pudo generar el análisis.";;
-
+      const analysis = res.analysis || "❌ No se pudo generar el análisis.";
       const botMessage = {
         sender: "bot",
         text: analysis,
         mode,
+        price: res.price || null,
         timestamp: new Date().toISOString(),
       };
 
@@ -139,7 +139,14 @@ const analysis = res.analysis || "❌ No se pudo generar el análisis.";;
 
         {isBot && isPro && (
           <>
-            <MarkdownCard content={item.text || ""} timestamp={item.timestamp} />
+            <MarkdownCard
+              content={(item.text || "")
+                .replace("#ANALYSIS_START", "")
+                .replace("#ANALYSIS_END", "")
+                .trim()}
+              timestamp={item.timestamp}
+              price={item.price}
+            />
             <AnalysisActions content={item.text || ""} />
           </>
         )}
@@ -149,12 +156,6 @@ const analysis = res.analysis || "❌ No se pudo generar el análisis.";;
         )}
       </View>
     );
-  };
-
-  const formatDate = (isoString) => {
-    if (!isoString) return "";
-    const d = new Date(isoString);
-    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
   };
 
   if (initializing) {

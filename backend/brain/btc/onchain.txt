@@ -1,0 +1,3 @@
+- Incremento de +1.9% en wallets con más de 10 BTC durante la última semana.
+- Reducción de salidas netas desde exchanges (Coinbase, Binance), sugiriendo acumulación a mediano plazo.
+- Hash rate en máximos históricos, lo que indica confianza en la seguridad de la red.

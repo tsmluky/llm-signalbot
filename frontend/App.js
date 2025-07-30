@@ -6,10 +6,9 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 
 import ChatScreen from "./screens/ChatScreen";
-import HistoryScreen from "./screens/HistoryScreen";
-import StatsScreen from "./screens/StatsScreen";
-import SettingsScreen from "./screens/SettingsScreen";
 import AdvisorChatScreen from "./screens/AdvisorChatScreen";
+import LogsScreen from "./screens/LogsScreen";
+import SettingsScreen from "./screens/SettingsScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -31,9 +30,6 @@ export default function App() {
               case "Historial":
                 iconName = "list";
                 break;
-              case "Estadísticas":
-                iconName = "bar-chart";
-                break;
               case "Ajustes":
                 iconName = "settings";
                 break;
@@ -51,8 +47,7 @@ export default function App() {
       >
         <Tab.Screen name="Chat" component={ChatScreen} />
         <Tab.Screen name="Advisor" component={AdvisorChatScreen} options={{ title: "Asesor" }} />
-        <Tab.Screen name="Historial" component={HistoryScreen} />
-        <Tab.Screen name="Estadísticas" component={StatsScreen} />
+        <Tab.Screen name="Historial" component={LogsScreen} />
         <Tab.Screen name="Ajustes" component={SettingsScreen} />
       </Tab.Navigator>
     </NavigationContainer>

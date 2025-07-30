@@ -1,0 +1,3 @@
+- Aumento del 12% en número de direcciones activas diarias (DAU).
+- Disminución en el coste promedio por transacción a menos de $0.0003.
+- TVL recuperándose con fuerza, liderado por Jito y MarginFi.

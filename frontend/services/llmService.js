@@ -1,6 +1,11 @@
-// frontend/services/llmService.js
-import { API_ANALYZE } from "../constants";
+import { API_ANALYZE, API_SIGNALS } from "../constants";
 
+/**
+ * Realiza una petición al backend para generar un análisis con LLM.
+ * @param {string} prompt - El mensaje del usuario.
+ * @param {string} token - El token a analizar (ej. ETH).
+ * @param {string} mode - El modo de análisis: 'lite', 'pro' o 'advisor'.
+ */
 export async function getLLMResponse(prompt, token, mode = "lite") {
   try {
     const response = await fetch(API_ANALYZE, {
@@ -48,5 +53,28 @@ export async function getLLMResponse(prompt, token, mode = "lite") {
       prompt,
       timestamp: new Date().toISOString(),
     };
+  }
+}
+
+/**
+ * Obtiene el historial de señales para un token y modo específico desde el backend.
+ * @param {string} token - El token (ej. ETH).
+ * @param {string} mode - El modo ('lite' o 'pro').
+ */
+export async function fetchSignalsByTokenAndMode(token, mode) {
+  try {
+    const url = `${API_SIGNALS}/${mode.toLowerCase()}/${token.toLowerCase()}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.status === "ok" && Array.isArray(data.signals)) {
+      return data.signals.reverse(); // más recientes primero
+    } else {
+      console.warn("⚠️ No se encontraron señales para", token, mode);
+      return [];
+    }
+  } catch (error) {
+    console.error("❌ Error al cargar señales:", error);
+    return [];
   }
 }

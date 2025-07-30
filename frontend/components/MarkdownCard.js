@@ -3,7 +3,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 
-const MarkdownCard = ({ content, timestamp }) => {
+const MarkdownCard = ({ content, timestamp, price }) => {
   const formattedTime = timestamp
     ? new Date(timestamp).toLocaleString('es-ES', {
         day: '2-digit',
@@ -14,13 +14,18 @@ const MarkdownCard = ({ content, timestamp }) => {
       })
     : null;
 
+  const safeContent = content?.trim() || "*⚠️ No se pudo generar contenido.*";
+
   return (
     <View style={styles.card}>
       {formattedTime && (
         <Text style={styles.timestamp}>📅 {formattedTime}</Text>
       )}
+      {price && (
+        <Text style={styles.price}>💰 Precio actual: ${price.toFixed(2)}</Text>
+      )}
       <Markdown style={markdownStyles}>
-        {content || ""}
+        {safeContent}
       </Markdown>
     </View>
   );
@@ -41,9 +46,16 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: 12,
     color: '#777',
-    marginBottom: 10,
+    marginBottom: 4,
     textAlign: 'right',
     fontStyle: 'italic',
+  },
+  price: {
+    fontSize: 14,
+    color: '#007aff',
+    marginBottom: 10,
+    fontWeight: '600',
+    textAlign: 'right',
   },
 });
 

@@ -1,74 +1,104 @@
+import os
 import csv
-import re
 from pathlib import Path
 from datetime import datetime
+import pytz
+import uuid
 
-def extract_value(text, key):
-    pattern = rf"\[{key}\]:\s*(.*)"
-    match = re.search(pattern, text)
-    return match.group(1).strip() if match else ""
+BASE_DIR = Path(__file__).resolve().parent.parent.parent / "backend" / "logs"
 
-def log_lite_signal(token, price, formatted_prompt, response_text):
-    now = _timestamp()
-    data = {
-        "timestamp": now,
-        "token": token.upper(),
-        "price": price,
-        "action": extract_value(response_text, "ACTION"),
-        "confidence": extract_value(response_text, "CONFIDENCE").replace("%", ""),
-        "risk": extract_value(response_text, "RISK"),
-        "timeframe": extract_value(response_text, "TIMEFRAME"),
-        "prompt": formatted_prompt,
-        "response": response_text
-    }
-    _write_row("logs/signals_lite.csv", data)
-
-def log_pro_signal(token, price, formatted_prompt, response_text):
-    now = _timestamp()
-    data = {
-        "timestamp": now,
-        "token": token.upper(),
-        "price": price,
-        "strategy": extract_value(response_text, "STRATEGY"),
-        "action": extract_value(response_text, "ACTION"),
-        "tp": extract_value(response_text, "TP"),
-        "sl": extract_value(response_text, "SL"),
-        "confidence": extract_value(response_text, "CONFIDENCE").replace("%", ""),
-        "risk": extract_value(response_text, "RISK"),
-        "timeframe": extract_value(response_text, "TIMEFRAME"),
-        "comment": extract_value(response_text, "COMMENT"),
-        "prompt": formatted_prompt,
-        "response": response_text
-    }
-    _write_row("logs/signals_pro.csv", data)
-
-def log_advisor_interaction(token, user_message, response_text, formatted_prompt=None):
-    now = _timestamp()
-    data = {
-        "timestamp": now,
-        "token": token.upper(),
-        "user_message": user_message,
-        "advisor_response": response_text
-    }
-    if formatted_prompt:
-        data["prompt"] = formatted_prompt
-    _write_row("logs/interactions_advisor.csv", data)
-
-# 🧱 Utilidades
-
-def _timestamp():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-def _write_row(filepath, data: dict):
-    path = Path(filepath)
+def ensure_dir(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
-    file_exists = path.exists()
 
-    # Evitar inconsistencias si cambian los campos
-    fieldnames = list(data.keys())
+def generate_id():
+    return str(uuid.uuid4())
 
-    with open(path, mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        if not file_exists:
+def log_lite_signal(token: str, price: float, prompt: str, response: str):
+    now = datetime.now(pytz.timezone("Europe/Madrid"))
+    filename = BASE_DIR / "LITE" / f"{token.lower()}.csv"
+    ensure_dir(filename)
+
+    signal_id = generate_id()
+
+    parsed = {
+        "id": signal_id,
+        "timestamp": now.isoformat(),
+        "token": token.upper(),
+        "price": round(price, 4),
+        "prompt": prompt.strip(),
+        "raw": response.strip(),
+    }
+
+    for line in response.splitlines():
+        if "[ACTION]:" in line:
+            parsed["action"] = line.split(":", 1)[1].strip()
+        elif "[TP]:" in line:
+            parsed["tp"] = line.split(":", 1)[1].strip()
+        elif "[SL]:" in line:
+            parsed["sl"] = line.split(":", 1)[1].strip()
+        elif "[CONFIDENCE]:" in line:
+            parsed["confidence"] = line.split(":", 1)[1].strip()
+        elif "[RISK]:" in line:
+            parsed["risk"] = line.split(":", 1)[1].strip()
+        elif "[TIMEFRAME]:" in line:
+            parsed["timeframe"] = line.split(":", 1)[1].strip()
+
+    headers = [
+        "id", "timestamp", "token", "price", "prompt", "raw",
+        "action", "tp", "sl", "confidence", "risk", "timeframe"
+    ]
+
+    write_header = not filename.exists()
+    with open(filename, mode="a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        if write_header:
             writer.writeheader()
-        writer.writerow(data)
+        writer.writerow(parsed)
+
+
+def log_pro_signal(token: str, price: float, prompt: str, response: str):
+    now = datetime.now(pytz.timezone("Europe/Madrid"))
+    filename = BASE_DIR / "PRO" / f"{token.lower()}.csv"
+    ensure_dir(filename)
+
+    parsed = {
+        "id": generate_id(),
+        "timestamp": now.isoformat(),
+        "token": token.upper(),
+        "price": round(price, 4),
+        "prompt": prompt.strip(),
+        "raw": response.strip(),
+    }
+
+    headers = ["id", "timestamp", "token", "price", "prompt", "raw"]
+
+    write_header = not filename.exists()
+    with open(filename, mode="a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        if write_header:
+            writer.writeheader()
+        writer.writerow(parsed)
+
+
+def log_advisor_interaction(token: str, message: str, response: str, prompt: str):
+    now = datetime.now(pytz.timezone("Europe/Madrid"))
+    filename = BASE_DIR / "ADVISOR" / f"{token.lower()}.csv"
+    ensure_dir(filename)
+
+    parsed = {
+        "id": generate_id(),
+        "timestamp": now.isoformat(),
+        "token": token.upper(),
+        "question": message.strip(),
+        "answer": response.strip(),
+        "prompt": prompt.strip(),
+    }
+
+    headers = ["id", "timestamp", "token", "question", "answer", "prompt"]
+
+    write_header = not filename.exists()
+    with open(filename, mode="a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        if write_header:
+            writer.writeheader()
+        writer.writerow(parsed)

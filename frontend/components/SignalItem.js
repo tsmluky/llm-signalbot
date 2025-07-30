@@ -1,83 +1,113 @@
-// components/SignalItem.js
+// frontend/screens/LogsScreen.js
+
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Dimensions } from "react-native";
-import { LineChart } from "react-native-chart-kit";
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  ActivityIndicator,
+  Picker,
+} from "react-native";
+import { API_SIGNALS } from "../constants";
+import SignalCard from "../components/SignalCard";
+import ResultCard from "../components/ResultCard";
 
-const CHART_WIDTH = Dimensions.get("window").width - 48;
+const TOKEN_LIST = ["BTC", "ETH", "SOL", "MATIC", "ADA", "BNB"];
 
-const fetchPriceChart = async (token) => {
-  const ids = {
-    BTC: "bitcoin",
-    ETH: "ethereum",
-    SOL: "solana",
-    MATIC: "matic-network",
-    ADA: "cardano",
-    BNB: "binancecoin",
+export default function LogsScreen() {
+  const [selectedToken, setSelectedToken] = useState("ETH");
+  const [signals, setSignals] = useState([]);
+  const [evaluated, setEvaluated] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchSignals = async () => {
+    setLoading(true);
+    try {
+      const base = `${API_SIGNALS}/lite/${selectedToken.toLowerCase()}`;
+      const evalUrl = `${API_SIGNALS}/evaluated/${selectedToken.toLowerCase()}`;
+
+      const [signalsRes, evaluatedRes] = await Promise.all([
+        fetch(base),
+        fetch(evalUrl),
+      ]);
+
+      const sData = await signalsRes.json();
+      const eData = await evaluatedRes.json();
+
+      if (sData.status === "ok") setSignals(sData.signals || []);
+      else setSignals([]);
+
+      if (eData.status === "ok") setEvaluated(eData.signals || []);
+      else setEvaluated([]);
+    } catch (err) {
+      console.error("❌ Error al cargar señales:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const id = ids[token.toUpperCase()];
-  if (!id) return [];
-
-  try {
-    const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=1`;
-    const res = await fetch(url);
-    const data = await res.json();
-    const prices = data.prices.map(([_, p]) => p);
-    return prices.slice(-20);
-  } catch (err) {
-    console.warn("Error al obtener precios de", token, err);
-    return [];
-  }
-};
-
-export default function SignalItem({ item, showCharts }) {
-  const [chartData, setChartData] = useState([]);
-
   useEffect(() => {
-    if (showCharts) {
-      fetchPriceChart(item.token).then(setChartData);
-    }
-  }, []);
+    fetchSignals();
+  }, [selectedToken]);
 
-  let bgColor = "#e0e0e0";
-  if (item.action === "LONG") bgColor = "#e2fbe2";
-  if (item.action === "SHORT") bgColor = "#fde1e1";
-  if (item.action === "WAIT") bgColor = "#f2f2f2";
+  const renderItem = ({ item, index }) => {
+    const result = evaluated.find((e) => e.id === item.id);
+    const evaluatedResult = result
+      ? {
+          result: result.result?.toLowerCase(),
+          percent: parseFloat(result.change_pct),
+          evaluated: true,
+        }
+      : {
+          result: "pendiente",
+          percent: 0,
+          evaluated: false,
+        };
+
+    return (
+      <View style={styles.rowContainer} key={item.id || index.toString()}>
+        <SignalCard
+          content={item.raw || item.analysis || ""}
+          timestamp={item.timestamp}
+        />
+        <ResultCard
+          result={evaluatedResult.result}
+          percent={evaluatedResult.percent}
+          evaluated={evaluatedResult.evaluated}
+        />
+      </View>
+    );
+  };
 
   return (
-    <View style={[styles.card, { backgroundColor: bgColor }]}>
-      <View style={styles.row}>
-        <Text style={styles.token}>{item.token}</Text>
-        <Text style={styles.price}>@ ${parseFloat(item.price || 0).toFixed(2)}</Text>
+    <View style={styles.container}>
+      <Text style={styles.header}>📡 Evaluación de Señales LITE</Text>
+
+      <View style={styles.pickerContainer}>
+        <Picker
+          selectedValue={selectedToken}
+          style={styles.picker}
+          onValueChange={setSelectedToken}
+        >
+          {TOKEN_LIST.map((token) => (
+            <Picker.Item key={token} label={token} value={token} />
+          ))}
+        </Picker>
       </View>
-      <Text style={styles.action}>🎯 {item.action}</Text>
-      <Text style={styles.details}>TP: {item.tp || "N/D"} | SL: {item.sl || "N/D"}</Text>
-      <Text style={styles.details}>
-        Confianza: {item.confidence || "?"}% | Riesgo: {item.risk || "?"}/10
-      </Text>
-      <Text style={styles.details}>⏳ Timeframe: {item.timeframe || "?"}</Text>
-      <Text style={styles.timestamp}>
-        {new Date(item.timestamp).toLocaleString()}
-      </Text>
-      {showCharts && chartData.length > 0 && (
-        <LineChart
-          data={{
-            labels: [],
-            datasets: [{ data: chartData }],
-          }}
-          width={CHART_WIDTH}
-          height={160}
-          withDots={false}
-          withVerticalLabels={false}
-          withHorizontalLabels={false}
-          withInnerLines={false}
-          chartConfig={{
-            backgroundGradientFrom: "#fff",
-            backgroundGradientTo: "#fff",
-            color: () => "#007aff",
-            strokeWidth: 2,
-          }}
-          style={{ marginTop: 10, borderRadius: 8 }}
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#007aff" />
+      ) : signals.length === 0 ? (
+        <Text style={styles.noData}>
+          No hay señales registradas para este token.
+        </Text>
+      ) : (
+        <FlatList
+          data={signals}
+          keyExtractor={(item, index) => item.id || index.toString()}
+          renderItem={renderItem}
+          contentContainerStyle={{ paddingBottom: 40 }}
         />
       )}
     </View>
@@ -85,41 +115,35 @@ export default function SignalItem({ item, showCharts }) {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    padding: 14,
-    marginBottom: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
+  container: {
+    flex: 1,
+    backgroundColor: "#f9f9f9",
+    padding: 16,
   },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  token: {
-    fontSize: 16,
+  header: {
+    fontSize: 22,
     fontWeight: "bold",
+    marginBottom: 16,
+    textAlign: "center",
   },
-  price: {
-    fontSize: 14,
-    fontStyle: "italic",
-    color: "#333",
+  pickerContainer: {
+    marginBottom: 16,
+    paddingHorizontal: 8,
   },
-  action: {
-    fontSize: 15,
-    fontWeight: "600",
-    marginVertical: 4,
+  picker: {
+    height: 44,
+    width: "100%",
   },
-  details: {
-    fontSize: 14,
+  rowContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 20,
+    paddingRight: 6,
   },
-  timestamp: {
-    marginTop: 6,
-    fontSize: 12,
-    color: "#777",
+  noData: {
+    textAlign: "center",
+    marginTop: 40,
+    fontSize: 16,
+    color: "#888",
   },
 });

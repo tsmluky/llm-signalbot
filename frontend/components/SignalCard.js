@@ -1,10 +1,9 @@
-// components/SignalCard.js
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 
 const parseSignal = (raw) => {
   const extract = (label) => {
-    const match = raw.match(new RegExp(`\\[${label}\\]:\\s*(.+)`));
+    const match = raw?.match(new RegExp(`\\[${label}\\]:\\s*(.+)`));
     return match ? match[1].trim() : "N/A";
   };
 
@@ -35,71 +34,58 @@ const SignalCard = ({ content, timestamp }) => {
   const { action, confidence, risk, timeframe, price } = parseSignal(content);
   const bgColor = getCardColor(action);
 
-const formattedTime = timestamp
-  ? new Date(timestamp).toLocaleString("es-ES", {
+  let formattedTime = "—";
+  try {
+    formattedTime = new Date(timestamp).toLocaleString("es-ES", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
-    })
-  : "—";
-
+    });
+  } catch {
+    formattedTime = "—";
+  }
 
   return (
-    <View style={[styles.container]}>
-      <Text style={styles.title}>📡 SEÑAL LITE</Text>
-      <View style={[styles.card, { backgroundColor: bgColor }]}>
-        <View style={styles.row}>
-          <Text style={styles.label}>🕓 Hora:</Text>
-          <Text style={styles.value}>{formattedTime}</Text>
-        </View>
+    <View style={[styles.card, { backgroundColor: bgColor }]}>
+      <View style={styles.row}>
+        <Text style={styles.label}>🕓 Hora:</Text>
+        <Text style={styles.value}>{formattedTime}</Text>
+      </View>
 
-        <View style={styles.row}>
-          <Text style={styles.label}>💰 Precio:</Text>
-          <Text style={styles.value}>
-            {price !== "N/A" ? `$${price}` : "N/D"}
-          </Text>
-        </View>
+      <View style={styles.row}>
+        <Text style={styles.label}>💰 Precio:</Text>
+        <Text style={styles.value}>
+          {price !== "N/A" ? `$${price}` : "N/D"}
+        </Text>
+      </View>
 
-        <View style={styles.row}>
-          <Text style={styles.label}>🎯 Acción:</Text>
-          <Text style={styles.value}>{action}</Text>
-        </View>
+      <View style={styles.row}>
+        <Text style={styles.label}>🎯 Acción:</Text>
+        <Text style={styles.value}>{action}</Text>
+      </View>
 
-        <View style={styles.row}>
-          <Text style={styles.label}>📈 Confianza:</Text>
-          <Text style={styles.value}>{confidence}</Text>
-        </View>
+      <View style={styles.row}>
+        <Text style={styles.label}>📈 Confianza:</Text>
+        <Text style={styles.value}>{confidence}</Text>
+      </View>
 
-        <View style={styles.row}>
-          <Text style={styles.label}>⚠️ Riesgo:</Text>
-          <Text style={styles.value}>{risk}</Text>
-        </View>
+      <View style={styles.row}>
+        <Text style={styles.label}>⚠️ Riesgo:</Text>
+        <Text style={styles.value}>{risk}</Text>
+      </View>
 
-        <View style={styles.row}>
-          <Text style={styles.label}>⏱️ Timeframe:</Text>
-          <Text style={styles.value}>{timeframe}</Text>
-        </View>
+      <View style={styles.row}>
+        <Text style={styles.label}>⏱️ Timeframe:</Text>
+        <Text style={styles.value}>{timeframe}</Text>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    alignSelf: "flex-start",
-    maxWidth: "88%",
-    marginVertical: 6,
-    marginHorizontal: 10,
-  },
-  title: {
-    textAlign: "center",
-    fontWeight: "bold",
-    color: "#aa8800",
-    marginBottom: 4,
-  },
   card: {
     borderRadius: 14,
     padding: 12,
@@ -111,6 +97,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 1,
+    marginBottom: 8,
   },
   row: {
     flexDirection: "row",
