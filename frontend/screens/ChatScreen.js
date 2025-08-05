@@ -46,6 +46,8 @@ const ChatScreen = () => {
   const [initializing, setInitializing] = useState(true);
 
   const flatListRef = useRef();
+  const userScrolledRef = useRef(false);
+
   const mode = isProMode ? "pro" : "lite";
   const STORAGE_KEY = `chat_history_${token?.toUpperCase()}`;
 
@@ -77,10 +79,6 @@ const ChatScreen = () => {
     };
     loadHistory();
   }, [token]);
-
-  useEffect(() => {
-    flatListRef.current?.scrollToEnd({ animated: true });
-  }, [history]);
 
   const saveHistory = async (data) => {
     try {
@@ -121,7 +119,6 @@ const ChatScreen = () => {
         timestamp: new Date().toISOString(),
       };
 
-      // Si es modo LITE, parseamos la señal y la pasamos como señal estructurada
       if (mode === "lite") {
         const parsed = parseSignal(analysis);
         botMessage = {
@@ -240,9 +237,12 @@ const ChatScreen = () => {
           keyExtractor={(item, index) => index.toString()}
           renderItem={renderItem}
           keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() =>
-            flatListRef.current?.scrollToEnd({ animated: true })
-          }
+          onScrollBeginDrag={() => (userScrolledRef.current = true)}
+          onContentSizeChange={() => {
+            if (!userScrolledRef.current) {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }
+          }}
         />
 
         {loading && (
@@ -268,7 +268,7 @@ const ChatScreen = () => {
             onChangeText={setPrompt}
             editable={!!token}
             multiline
-            onFocus={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            onFocus={() => (userScrolledRef.current = false)}
           />
           <TouchableOpacity
             style={[

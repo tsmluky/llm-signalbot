@@ -1,16 +1,15 @@
-// components/MarkdownCard.js
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import Markdown from 'react-native-markdown-display';
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+import Markdown from "react-native-markdown-display";
 
 const MarkdownCard = ({ content, timestamp, price }) => {
   const formattedTime = timestamp
-    ? new Date(timestamp).toLocaleString('es-ES', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+    ? new Date(timestamp).toLocaleString("es-ES", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       })
     : null;
 
@@ -22,83 +21,77 @@ const MarkdownCard = ({ content, timestamp, price }) => {
         <Text style={styles.timestamp}>📅 {formattedTime}</Text>
       )}
       {price && (
-        <Text style={styles.price}>💰 Precio actual: ${price.toFixed(2)}</Text>
+        <Text style={styles.price}>💰 Precio actual: ${parseFloat(price).toFixed(2)}</Text>
       )}
-      <Markdown style={markdownStyles}>
-        {safeContent}
-      </Markdown>
+      <Markdown style={markdownStyles}>{safeContent}</Markdown>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fffef5',
+    backgroundColor: "#fffefc",
     borderRadius: 16,
     padding: 16,
     marginVertical: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: "#eee",
   },
   timestamp: {
     fontSize: 12,
-    color: '#777',
+    color: "#777",
     marginBottom: 4,
-    textAlign: 'right',
-    fontStyle: 'italic',
+    textAlign: "right",
+    fontStyle: "italic",
   },
   price: {
     fontSize: 14,
-    color: '#007aff',
+    color: "#007aff",
     marginBottom: 10,
-    fontWeight: '600',
-    textAlign: 'right',
+    fontWeight: "600",
+    textAlign: "right",
   },
 });
 
 const markdownStyles = {
   body: {
     fontSize: 14,
-    lineHeight: 20,
-    color: '#222',
+    lineHeight: 22,
+    color: "#222",
   },
   heading1: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#007aff',
+    fontWeight: "bold",
+    color: "#007aff",
     marginBottom: 8,
   },
   heading2: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#007aff',
+    fontWeight: "bold",
+    color: "#007aff",
     marginVertical: 6,
   },
   paragraph: {
     marginVertical: 4,
   },
   list_item: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginVertical: 2,
   },
   bullet_list_icon: {
-    color: '#666',
+    color: "#666",
     marginRight: 6,
   },
   strong: {
-    fontWeight: 'bold',
-    color: '#000',
+    fontWeight: "bold",
+    color: "#000",
   },
   code_block: {
-    backgroundColor: '#f6f8fa',
+    backgroundColor: "#f6f8fa",
     padding: 10,
     borderRadius: 6,
-    fontFamily: 'monospace',
+    fontFamily: "monospace",
   },
 };
 
