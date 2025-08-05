@@ -1,4 +1,3 @@
-// ChatScreen.js
 import React, { useState, useRef, useEffect } from "react";
 import {
   View,
@@ -22,6 +21,21 @@ import AnalysisActions from "../components/AnalysisActions";
 
 const MAX_MESSAGES = 50;
 const AVAILABLE_TOKENS = ["BTC", "ETH", "SOL", "MATIC", "ADA", "BNB"];
+
+const parseSignal = (raw) => {
+  const extract = (label) => {
+    const match = raw?.match(new RegExp(`\\[${label}\\]:\\s*(.+)`));
+    return match ? match[1].trim() : "N/A";
+  };
+
+  return {
+    price: extract("PRICE"),
+    action: extract("ACTION"),
+    confidence: extract("CONFIDENCE"),
+    risk: extract("RISK"),
+    timeframe: extract("TIMEFRAME"),
+  };
+};
 
 const ChatScreen = () => {
   const [token, setToken] = useState(null);
@@ -98,13 +112,24 @@ const ChatScreen = () => {
       console.log("📨 ANALYSIS:", res.analysis);
 
       const analysis = res.analysis || "❌ No se pudo generar el análisis.";
-      const botMessage = {
+
+      let botMessage = {
         sender: "bot",
         text: analysis,
         mode,
         price: res.price || null,
         timestamp: new Date().toISOString(),
       };
+
+      // Si es modo LITE, parseamos la señal y la pasamos como señal estructurada
+      if (mode === "lite") {
+        const parsed = parseSignal(analysis);
+        botMessage = {
+          ...botMessage,
+          ...parsed,
+          token,
+        };
+      }
 
       const finalHistory = [...updatedHistory, botMessage];
       setHistory(finalHistory);
@@ -152,7 +177,17 @@ const ChatScreen = () => {
         )}
 
         {isBot && isLite && (
-          <SignalCard content={item.text || ""} timestamp={item.timestamp} />
+          <SignalCard
+            signal={{
+              token: item.token,
+              timestamp: item.timestamp,
+              price: item.price,
+              action: item.action,
+              confidence: item.confidence,
+              risk: item.risk,
+              timeframe: item.timeframe,
+            }}
+          />
         )}
       </View>
     );

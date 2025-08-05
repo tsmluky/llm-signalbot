@@ -1,21 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 
-const parseSignal = (raw) => {
-  const extract = (label) => {
-    const match = raw?.match(new RegExp(`\\[${label}\\]:\\s*(.+)`));
-    return match ? match[1].trim() : "N/A";
-  };
-
-  return {
-    action: extract("ACTION"),
-    confidence: extract("CONFIDENCE"),
-    risk: extract("RISK"),
-    timeframe: extract("TIMEFRAME"),
-    price: extract("PRICE"),
-  };
-};
-
 const getCardColor = (action) => {
   switch (action?.toUpperCase()) {
     case "LONG":
@@ -30,8 +15,22 @@ const getCardColor = (action) => {
   }
 };
 
-const SignalCard = ({ content, timestamp }) => {
-  const { action, confidence, risk, timeframe, price } = parseSignal(content);
+const SignalCard = ({ signal }) => {
+  if (!signal || typeof signal !== "object") {
+    console.warn("⚠️ Señal no válida recibida en SignalCard:", signal);
+    return null;
+  }
+
+  const {
+    timestamp = "",
+    token = "N/A",
+    price = "N/D",
+    action = "N/D",
+    confidence = "N/D",
+    risk = "N/D",
+    timeframe = "N/D",
+  } = signal;
+
   const bgColor = getCardColor(action);
 
   let formattedTime = "—";
@@ -44,12 +43,17 @@ const SignalCard = ({ content, timestamp }) => {
       minute: "2-digit",
       hour12: false,
     });
-  } catch {
-    formattedTime = "—";
+  } catch (err) {
+    console.warn("⛔ Error al formatear fecha:", timestamp, err);
   }
 
   return (
     <View style={[styles.card, { backgroundColor: bgColor }]}>
+      <View style={styles.row}>
+        <Text style={styles.label}>📅 Token:</Text>
+        <Text style={styles.value}>{token}</Text>
+      </View>
+
       <View style={styles.row}>
         <Text style={styles.label}>🕓 Hora:</Text>
         <Text style={styles.value}>{formattedTime}</Text>
@@ -58,7 +62,7 @@ const SignalCard = ({ content, timestamp }) => {
       <View style={styles.row}>
         <Text style={styles.label}>💰 Precio:</Text>
         <Text style={styles.value}>
-          {price !== "N/A" ? `$${price}` : "N/D"}
+          {price !== "N/D" ? `$${price}` : "N/D"}
         </Text>
       </View>
 

@@ -6,9 +6,12 @@ import {
   Switch,
   StyleSheet,
   ActivityIndicator,
+  Alert,
+  TouchableOpacity,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
+import { API_BASE } from "../constants";
 
 const AVAILABLE_TOKENS = ["BTC", "ETH", "SOL", "MATIC", "ADA", "BNB"];
 
@@ -42,6 +45,39 @@ export default function SettingsScreen() {
     } catch (e) {
       console.warn("❌ Error al guardar ajustes:", e);
     }
+  };
+
+  const handleResetHistory = async () => {
+    Alert.alert(
+      "¿Confirmar borrado?",
+      `¿Deseas borrar el historial del token ${favoriteToken} (${defaultMode.toUpperCase()})?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Borrar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const url = `${API_BASE}/reset/${defaultMode}/${favoriteToken.toLowerCase()}`;
+              console.log("🧼 Reset URL:", url);
+
+              const res = await fetch(url, { method: "DELETE" });
+              const data = await res.json();
+              console.log("🔁 Reset response:", data);
+
+              if (res.ok && data?.status === "ok") {
+                Alert.alert("✅ Historial borrado correctamente");
+              } else {
+                Alert.alert("⚠️ No se pudo borrar", data?.message || "Error desconocido");
+              }
+            } catch (error) {
+              console.error("❌ Error al resetear historial:", error);
+              Alert.alert("❌ Error al borrar", error.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   useEffect(() => {
@@ -104,6 +140,10 @@ export default function SettingsScreen() {
           thumbColor={showCharts ? "#007aff" : "#eee"}
         />
       </View>
+
+      <TouchableOpacity style={styles.resetButton} onPress={handleResetHistory}>
+        <Text style={styles.resetText}>🧼 Borrar historial de este token</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -146,5 +186,16 @@ const styles = StyleSheet.create({
   picker: {
     height: 44,
     width: "100%",
+  },
+  resetButton: {
+    marginTop: 20,
+    padding: 12,
+    backgroundColor: "#eee",
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  resetText: {
+    color: "#444",
+    fontWeight: "500",
   },
 });

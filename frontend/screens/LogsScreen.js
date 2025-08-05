@@ -33,10 +33,9 @@ export default function LogsScreen() {
       const res = await fetch(url);
       const data = await res.json();
       if (data.status === "ok" && Array.isArray(data.signals)) {
-        // Normalizamos datos y generamos IDs si faltan
         const parsed = data.signals.reverse().map((s, index) => ({
           ...s,
-          id: s.id || `${s.timestamp}-${index}`,
+          id: `${s.timestamp}-${index}`, // siempre generamos un ID único
         }));
         setSignals(parsed);
       } else {
@@ -65,20 +64,26 @@ export default function LogsScreen() {
       },
     ]);
   };
+const renderItem = ({ item }) => {
+  if (
+    !item.timestamp ||
+    !item.action ||
+    !item.price ||
+    !item.confidence ||
+    !item.risk ||
+    !item.timeframe
+  ) {
+    console.warn("⚠️ Señal malformada:", item);
+    return null;
+  }
 
-  const renderItem = ({ item }) => {
-    if (!item.id) {
-      console.warn("⚠️ Señal sin ID:", item);
-    }
-
-    return (
-      <EvaluatedSignalCard
-        key={item.id}
-        signal={item}
-        onDelete={() => deleteSignal(item.id)}
-      />
-    );
-  };
+  return (
+    <EvaluatedSignalCard
+      signal={item}
+      onDelete={() => deleteSignal(item.id)}
+    />
+  );
+};
 
   return (
     <View style={styles.container}>

@@ -14,6 +14,7 @@ from backend.market_data import get_market_data
 from backend.logs.signal_logger import log_lite_signal, log_pro_signal, log_advisor_interaction
 from backend.logs.evaluated_logger import log_evaluated_signal
 from backend.utils.session_logger import log_advisor_session
+from backend.utils.parsers import extract_fields_from_signal
 
 from backend.utils import format_prompt_lite, format_prompt_pro, format_prompt_assist
 from backend.utils.context_engine import compile_context
@@ -135,7 +136,6 @@ async def analyze_token(req: AnalysisRequest):
         if not market_data or price is None or str(price).lower() in ["nan", "n/d", ""]:
             raise ValueError(f"No se pudo obtener información válida del token '{token}'.")
 
-        # Construir el prompt según el modo
         if mode == "lite":
             brain_context = compile_context(token)
             prompt = format_prompt_lite.build_prompt(token, message, market_data, brain_context)
@@ -176,7 +176,20 @@ async def analyze_token(req: AnalysisRequest):
             if "#SIGNAL_END" in response:
                 price_line = f"[PRICE]: ${float(price):.4f}  \n"
                 response = response.replace("#SIGNAL_END", price_line + "#SIGNAL_END")
-            log_lite_signal(token, float(price), prompt, response)
+
+            signal_fields = extract_fields_from_signal(response)
+
+            log_lite_signal(
+                token=token,
+                price=float(price),
+                prompt=prompt,
+                response=response,
+                action=signal_fields.get("action", ""),
+                confidence=signal_fields.get("confidence", ""),
+                risk=signal_fields.get("risk", ""),
+                timeframe=signal_fields.get("timeframe", ""),
+                timestamp=datetime.now(pytz.timezone("Europe/Madrid")).isoformat()
+            )
             logger.info("📝 Señal LITE registrada.")
 
         elif mode == "pro":
@@ -188,7 +201,6 @@ async def analyze_token(req: AnalysisRequest):
             log_advisor_session(token, message, response)
             logger.info("💬 Interacción ADVISOR registrada.")
 
-        # Formatear markdown si es necesario
         if mode == "pro":
             if "#ANALYSIS_START" in response and "#ANALYSIS_END" in response:
                 formatted_response = build_markdown_from_analysis(response)
@@ -268,3 +280,11 @@ def get_evaluated_logs(token: str):
     except Exception as e:
         logger.error(f"[❌ Error al leer logs evaluados]: {e}")
         raise HTTPException(status_code=500, detail="No se pudieron cargar los logs evaluados.")
+
+@app.delete("/reset/{mode}/{token}")
+def reset_logs(mode: str, token: str):
+    path = f"backend/logs/{mode.upper()}/{token.lower()}.csv"
+    if os.path.exists(path):
+        os.remove(path)
+        return {"status": "ok", "message": "Archivo borrado"}
+    return {"status": "error", "message": "Archivo no encontrado"}
