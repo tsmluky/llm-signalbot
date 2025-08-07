@@ -162,7 +162,7 @@ export default function EvaluatedSignalCard({ signal, onDelete }) {
 const styles = StyleSheet.create({
   card: {
     borderRadius: 14,
-    padding: 12,
+    padding: 16, // más aire visual
     borderWidth: 1,
     borderColor: "#ddd",
     backgroundColor: "#fefefe",
@@ -177,37 +177,44 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "bold",
     color: "#aa8800",
+    lineHeight: 22,
   },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 6,
+    alignItems: "center",
+    paddingBottom: 4, // ← aire vertical entre filas
+    marginBottom: 4,
   },
   label: {
     fontWeight: "600",
     color: "#444",
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 20,
   },
   value: {
-    fontSize: 13,
+    fontSize: 14,
     color: "#000",
+    lineHeight: 20,
   },
   evalContainer: {
-    marginTop: 10,
+    marginTop: 12,
     alignItems: "center",
   },
   evalResult: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "bold",
+    lineHeight: 20,
   },
   pendingEval: {
-    fontSize: 13,
+    fontSize: 14,
     color: "#777",
+    lineHeight: 20,
   },
 });

@@ -1,6 +1,6 @@
 // components/DropdownTokenSelector.js
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Platform } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 
 const DropdownTokenSelector = ({ token, setToken, tokens = [] }) => {
@@ -14,6 +14,7 @@ const DropdownTokenSelector = ({ token, setToken, tokens = [] }) => {
           style={styles.picker}
           dropdownIconColor="#007aff"
           mode="dropdown"
+          itemStyle={styles.item}
         >
           {tokens.map((item) => (
             <Picker.Item label={item} value={item} key={item} />
@@ -36,6 +37,8 @@ const styles = StyleSheet.create({
   label: {
     fontWeight: "600",
     marginRight: 10,
+    fontSize: 14,
+    color: "#000",
   },
   pickerWrapper: {
     flex: 1,
@@ -47,7 +50,13 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   picker: {
-    height: 44,
+    height: 48,
     width: "100%",
+    color: Platform.OS === "android" ? "#000" : undefined,
+  },
+  item: {
+    fontSize: 14,
+    height: 44,
+    color: "#000",
   },
 });

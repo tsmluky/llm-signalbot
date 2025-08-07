@@ -18,21 +18,14 @@ export async function getLLMResponse(prompt, token, mode = "lite") {
     console.log("[🔍 DATA RAW]:", data);
 
     if (!response.ok || data.status !== "ok") {
-      const msg = data.message || "Fallo desconocido.";
+      const msg = data.message || data.analysis || "Fallo desconocido.";
       throw new Error(`❌ No se pudo generar el análisis. ${msg}`);
     }
 
     const analysis = data.analysis;
     if (!analysis || typeof analysis !== "string" || analysis.trim() === "") {
       console.warn("⚠️ El campo 'analysis' está vacío o malformado.");
-      return {
-        status: "error",
-        analysis: "❌ El modelo no devolvió contenido útil.",
-        token,
-        mode,
-        prompt,
-        timestamp: new Date().toISOString(),
-      };
+      throw new Error("El modelo no devolvió contenido útil.");
     }
 
     return {
@@ -45,14 +38,7 @@ export async function getLLMResponse(prompt, token, mode = "lite") {
     };
   } catch (error) {
     console.error("❌ Error en getLLMResponse:", error);
-    return {
-      status: "error",
-      analysis: "❌ Error inesperado al generar el análisis.",
-      token,
-      mode,
-      prompt,
-      timestamp: new Date().toISOString(),
-    };
+    throw error;
   }
 }
 

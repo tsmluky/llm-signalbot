@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
+  Alert,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getLLMResponse } from "../services/llmService";
@@ -52,19 +53,18 @@ const ChatScreen = () => {
   const STORAGE_KEY = `chat_history_${token?.toUpperCase()}`;
 
   useEffect(() => {
-    const loadPreferences = async () => {
+    const resetCacheAndLoad = async () => {
       try {
-        const savedToken = await AsyncStorage.getItem("favorite_token");
-        const savedMode = await AsyncStorage.getItem("default_mode");
-        setToken(savedToken || null);
-        setIsProMode(savedMode === "pro");
+        await AsyncStorage.clear(); // Limpieza total para evitar caché corrupta
+        setToken(null);
+        setIsProMode(false);
       } catch (e) {
-        console.warn("❌ Error cargando preferencias:", e);
+        console.warn("❌ Error limpiando caché:", e);
       } finally {
         setInitializing(false);
       }
     };
-    loadPreferences();
+    resetCacheAndLoad();
   }, []);
 
   useEffect(() => {
@@ -92,6 +92,8 @@ const ChatScreen = () => {
   const handleSend = async () => {
     if (!prompt.trim() || !token?.trim()) return;
 
+    console.log("📤 Enviando:", { token, prompt, mode });
+
     const newUserMessage = {
       sender: "user",
       text: prompt,
@@ -108,6 +110,11 @@ const ChatScreen = () => {
       const res = await getLLMResponse(prompt, token, mode);
       console.log("📨 RESPUESTA RAW:", res);
       console.log("📨 ANALYSIS:", res.analysis);
+
+      if (!res || res.status !== "ok") {
+        Alert.alert("Error", "No se pudo generar el análisis.");
+        return;
+      }
 
       const analysis = res.analysis || "❌ No se pudo generar el análisis.";
 
@@ -133,11 +140,12 @@ const ChatScreen = () => {
       await saveHistory(finalHistory);
     } catch (err) {
       console.warn("❌ Error al generar respuesta:", err);
+      Alert.alert("Error", `❌ ${err.message}`);
       setHistory((prev) => [
         ...prev,
         {
           sender: "bot",
-          text: "❌ Error en la respuesta",
+          text: `❌ ${err.message}`,
           mode,
           timestamp: new Date().toISOString(),
         },

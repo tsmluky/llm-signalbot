@@ -1,3 +1,4 @@
+// frontend/components/MarkdownCard.js
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Markdown from "react-native-markdown-display";
@@ -18,10 +19,15 @@ const MarkdownCard = ({ content, timestamp, price }) => {
   return (
     <View style={styles.card}>
       {formattedTime && (
-        <Text style={styles.timestamp}>📅 {formattedTime}</Text>
+        <Text style={styles.timestamp}>
+          🗓️ <Text style={{ fontStyle: "italic" }}>{formattedTime}</Text>
+        </Text>
       )}
       {price && (
-        <Text style={styles.price}>💰 Precio actual: ${parseFloat(price).toFixed(2)}</Text>
+        <Text style={styles.price}>
+          💰 <Text style={{ fontWeight: "bold" }}>Precio actual:</Text>{" "}
+          ${parseFloat(price).toFixed(2)}
+        </Text>
       )}
       <Markdown style={markdownStyles}>{safeContent}</Markdown>
     </View>
@@ -30,25 +36,28 @@ const MarkdownCard = ({ content, timestamp, price }) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#fffefc",
+    backgroundColor: "#fefefe",
     borderRadius: 16,
-    padding: 16,
-    marginVertical: 4,
+    padding: 18,
+    marginVertical: 6,
     borderWidth: 1,
     borderColor: "#eee",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   timestamp: {
     fontSize: 12,
-    color: "#777",
+    color: "#888",
     marginBottom: 4,
     textAlign: "right",
-    fontStyle: "italic",
   },
   price: {
     fontSize: 14,
-    color: "#007aff",
+    color: "#333",
     marginBottom: 10,
-    fontWeight: "600",
     textAlign: "right",
   },
 });
@@ -60,16 +69,21 @@ const markdownStyles = {
     color: "#222",
   },
   heading1: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "bold",
-    color: "#007aff",
-    marginBottom: 8,
+    color: "#005bbb",
+    marginBottom: 10,
+    marginTop: 16,
+    borderBottomWidth: 1,
+    borderColor: "#ddd",
+    paddingBottom: 4,
   },
   heading2: {
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 17,
+    fontWeight: "600",
     color: "#007aff",
-    marginVertical: 6,
+    marginTop: 12,
+    marginBottom: 6,
   },
   paragraph: {
     marginVertical: 4,
@@ -81,7 +95,7 @@ const markdownStyles = {
   },
   bullet_list_icon: {
     color: "#666",
-    marginRight: 6,
+    marginRight: 8,
   },
   strong: {
     fontWeight: "bold",
@@ -89,9 +103,17 @@ const markdownStyles = {
   },
   code_block: {
     backgroundColor: "#f6f8fa",
-    padding: 10,
+    padding: 12,
     borderRadius: 6,
     fontFamily: "monospace",
+    color: "#444",
+  },
+  blockquote: {
+    backgroundColor: "#f4f4f4",
+    padding: 10,
+    borderLeftWidth: 4,
+    borderColor: "#ccc",
+    marginVertical: 8,
   },
 };
 

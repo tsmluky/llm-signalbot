@@ -6,11 +6,11 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
-  Picker,
   Alert,
 } from "react-native";
 import { API_SIGNALS } from "../constants";
 import EvaluatedSignalCard from "../components/EvaluatedSignalCard";
+import { Picker } from "@react-native-picker/picker"
 
 const TOKEN_IDS = {
   BTC: "bitcoin",
@@ -32,17 +32,33 @@ export default function LogsScreen() {
       const url = `${API_SIGNALS}/lite/${selectedToken.toLowerCase()}`;
       const res = await fetch(url);
       const data = await res.json();
+
       if (data.status === "ok" && Array.isArray(data.signals)) {
-        const parsed = data.signals.reverse().map((s, index) => ({
+        const cleanSignals = data.signals.filter(
+          (s) =>
+            s &&
+            typeof s === "object" &&
+            s.timestamp &&
+            s.price &&
+            s.action &&
+            s.confidence &&
+            s.risk &&
+            s.timeframe
+        );
+
+        const parsed = cleanSignals.reverse().map((s, index) => ({
           ...s,
-          id: `${s.timestamp}-${index}`, // siempre generamos un ID único
+          id: `${s.timestamp}-${index}`, // ID único
         }));
         setSignals(parsed);
       } else {
+        console.warn("⚠️ Respuesta inesperada:", data);
         setSignals([]);
       }
     } catch (err) {
       console.error("❌ Error al cargar señales:", err);
+      Alert.alert("Error", "No se pudo cargar el historial.");
+      setSignals([]);
     } finally {
       setLoading(false);
     }
@@ -64,26 +80,42 @@ export default function LogsScreen() {
       },
     ]);
   };
-const renderItem = ({ item }) => {
-  if (
-    !item.timestamp ||
-    !item.action ||
-    !item.price ||
-    !item.confidence ||
-    !item.risk ||
-    !item.timeframe
-  ) {
-    console.warn("⚠️ Señal malformada:", item);
-    return null;
-  }
 
-  return (
-    <EvaluatedSignalCard
-      signal={item}
-      onDelete={() => deleteSignal(item.id)}
-    />
-  );
-};
+  const renderItem = ({ item }) => {
+    if (!item || typeof item !== "object") {
+      console.warn("❌ Item inválido:", item);
+      return (
+        <Text style={{ color: "red", padding: 10 }}>
+          ❌ Error: señal inválida
+        </Text>
+      );
+    }
+
+    const {
+      timestamp,
+      action,
+      price,
+      confidence,
+      risk,
+      timeframe
+    } = item;
+
+    if (!timestamp || !action || !price || !confidence || !risk || !timeframe) {
+      console.warn("⚠️ Señal incompleta:", item);
+      return (
+        <Text style={{ color: "orange", padding: 10 }}>
+          ⚠️ Señal incompleta
+        </Text>
+      );
+    }
+
+    return (
+      <EvaluatedSignalCard
+        signal={item}
+        onDelete={() => deleteSignal(item.id)}
+      />
+    );
+  };
 
   return (
     <View style={styles.container}>

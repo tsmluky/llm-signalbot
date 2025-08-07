@@ -281,3 +281,10 @@ def get_evaluated_logs(token: str):
         logger.error(f"[❌ Error al leer logs evaluados]: {e}")
         raise HTTPException(status_code=500, detail="No se pudieron cargar los logs evaluados.")
 
+@app.delete("/reset/{mode}/{token}")
+def reset_logs(mode: str, token: str):
+    path = f"backend/logs/{mode.upper()}/{token.lower()}.csv"
+    if os.path.exists(path):
+        os.remove(path)
+        return {"status": "ok", "message": "Archivo borrado"}
+    return {"status": "error", "message": "Archivo no encontrado"}

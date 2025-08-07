@@ -2,7 +2,7 @@
 
 // 🧪 LOCALHOST para desarrollo
 //export const API_BASE = "http://localhost:8000";
-export const API_BASE = "https://signalbot-api.onrender.com"
+export const API_BASE = "https://signalbot-api.onrender.com";
 
 // ✅ ENDPOINTS corregidos
 export const API_ANALYZE = `${API_BASE}/analyze`;
