@@ -114,8 +114,8 @@ Además, la app muestra:
 ## 👨‍💻 Autor
 
 **Desarrollado por [@tsmluky](https://github.com/tsmluky)**  
-Un proyecto Indie Hacker creado desde cero con foco en funcionalidad real y automatización del análisis técnico.
 
 ---
 
 > “SignalBot no es un oráculo. Es tu copiloto técnico, listo para ayudarte a ver mejor el mercado.”
+
