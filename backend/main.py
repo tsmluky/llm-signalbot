@@ -1,290 +1,298 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from __future__ import annotations
+import sqlite3
+import sys, pathlib as _pl
+_pkg = _pl.Path(__file__).resolve().parent
+_root = _pkg.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+import os, datetime as dt
+from typing import Optional, Dict, Any
+import pandas as pd
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import logging
-import re
-import csv
-from pathlib import Path
-from datetime import datetime
-import pytz
 
-from backend.deepseek_client import get_response_from_llm
-from backend.market_data import get_market_data
-from backend.logs.signal_logger import log_lite_signal, log_pro_signal, log_advisor_interaction
-from backend.logs.evaluated_logger import log_evaluated_signal
-from backend.utils.session_logger import log_advisor_session
-from backend.utils.parsers import extract_fields_from_signal
+from backend.config import settings
+from backend.db import get_conn, init_db, insert_lite, insert_pro, page_lite, page_pro, ensure_schema, page_pro
+from backend.schemas import FeaturesIn, LiteSignalOut, ProAnalysisOut
+from backend.services.indicators import compute_features
+from backend.services.llm_orchestrator import LLMOrchestrator
+from backend.services.data_fetch import fetch_ohlcv_with_fallback
 
-from backend.utils import format_prompt_lite, format_prompt_pro, format_prompt_assist
-from backend.utils.context_engine import compile_context
+try:
+    from backend.utils.rl_cache import RateLimiter
+    _rl = RateLimiter(settings.rate_limit_per_min)
+    def _rate_limit():
+        if not _rl.allow():
+            raise HTTPException(429, "Rate limit")
+        return None
+except Exception:
+    def _rate_limit():
+        return None
 
-app = FastAPI()
+app = FastAPI(title="SignalBot API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("signalbot")
+conn = get_conn(settings.db_path); init_db(conn)
+llm = LLMOrchestrator(settings.deepseek_api_key)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def _normalize_ohlc(df: pd.DataFrame):
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    alias = {"timestamp":"ts","time":"ts","date":"ts","open_time":"ts","o":"open","h":"high","l":"low","c":"close","vol":"volume","qty":"volume"}
+    for old,new in alias.items():
+        if old in df.columns and new not in df.columns:
+            df.rename(columns={old:new}, inplace=True)
+    need = {"ts","open","high","low","close","volume"}
+    missing = sorted(list(need - set(df.columns)))
+    if missing:
+        raise HTTPException(400, f"CSV debe contener columnas {sorted(list(need))}. Faltan: {missing}.")
+    if pd.api.types.is_numeric_dtype(df["ts"]):
+        mx = float(df["ts"].max()); unit = "ms" if mx > 1e12 else "s"
+        df["ts"] = pd.to_datetime(df["ts"], unit=unit, errors="coerce")
+    else:
+        df["ts"] = pd.to_datetime(df["ts"], errors="coerce")
+    df["ts"] = df["ts"].dt.tz_localize(None).astype(str)
+    for c in ["open","high","low","close","volume"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    if df[["open","high","low","close"]].isna().any().any():
+        bad = df[["open","high","low","close"]].isna().sum().to_dict()
+        raise HTTPException(400, f"OHLC contiene NaN tras coerción numérica: {bad}.")
+    return df
 
-class AnalysisRequest(BaseModel):
+@app.get("/health")
+def health(): return {"ok": True, "db": settings.db_path}
+
+@app.post("/features")
+def features(payload: FeaturesIn, _: None = Depends(_rate_limit)):
+    import os
+    try:
+        if payload.data and "csv_path" in payload.data:
+            p = payload.data["csv_path"]
+            p = os.path.expanduser(p)
+            if not os.path.isabs(p):
+                p = os.path.normpath(os.path.join(str(_root), p))
+            if not os.path.exists(p):
+                raise HTTPException(400, f"CSV no encontrado: {p}")
+            df = pd.read_csv(p)
+        elif payload.data and "rows" in payload.data:
+            df = pd.DataFrame(payload.data["rows"])
+        else:
+            raise HTTPException(400, "Falta data (csv_path o rows)")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Error leyendo CSV: {e!r}")
+
+    df = _normalize_ohlc(df)
+    win = int(payload.window or 120)
+    if len(df) > win: df = df.tail(win)
+    cfg = payload.config or {}
+    try:
+        feats = compute_features(df, cfg)
+    except Exception as e:
+        raise HTTPException(400, f"Fallo en compute_features: {e.__class__.__name__}: {e}")
+    return {"price":{"close":df["close"].tail(5).tolist(),"ts":df["ts"].tail(5).tolist()},
+            "indicators":feats, "meta":{"window":win,"timeframe":payload.timeframe,"source":"csv/local"}}
+
+class CCXTFeaturesIn(BaseModel):
     token: str
-    message: str
-    mode: str = "pro"
-
-class EvaluationRequest(BaseModel):
-    token: str
-    price: float
-    action: str
-    confidence: str
-    risk: str
     timeframe: str
-    result: str  # "correct" o "wrong"
-    percent: float
-    timestamp: str
+    exchange: str = "kraken"
+    symbol: str = "ETH/USD"
+    limit: int = 300
+    config: dict | None = None
+    window: int | None = 120
+    fallbacks: list[str] | None = ["binance", "bybit", "mexc", "okx"]
 
-def is_valid_response(mode: str, response: str) -> bool:
-    if not response or "❌" in response:
-        return False
-    response = response.strip()
-
-    if mode == "lite":
-        return "#SIGNAL_START" in response and "#SIGNAL_END" in response
-
-    elif mode == "pro":
-        if "#ANALYSIS_START" in response and "#ANALYSIS_END" in response:
-            try:
-                content = response.split("#ANALYSIS_START", 1)[1].split("#ANALYSIS_END", 1)[0].strip()
-                return len(content) > 100
-            except Exception:
-                return False
-        else:
-            return len(response) > 300 and ("ETH" in response.upper() or "Ethereum" in response)
-
-    elif mode == "advisor":
-        return len(response.strip()) > 50
-
-    return False
-
-def build_markdown_from_analysis(text: str) -> str:
+@app.post("/features/ccxt")
+def features_ccxt(payload: CCXTFeaturesIn, _: None = Depends(_rate_limit)):
     try:
-        raw = text.strip().replace("#ANALYSIS_START", "").replace("#ANALYSIS_END", "")
-        sections = {
-            "CTXT": "🌐 Contexto",
-            "TA": "📊 Análisis Técnico",
-            "PLAN": "📅 Plan de Acción",
-            "INSIGHT": "🧠 Insight",
-            "PARAMS": "⚙️ Parámetros",
-            "RECO": "🎯 Recomendación Operativa"
-        }
-
-        current_section = None
-        parsed = {k: "" for k in sections}
-
-        for line in raw.splitlines():
-            tag = re.match(r"#(CTXT|TA|PLAN|INSIGHT|PARAMS|RECO)#", line.strip())
-            if tag:
-                current_section = tag.group(1)
-                continue
-            elif current_section:
-                parsed[current_section] += line + "\n"
-
-        markdown = ""
-        for key, title in sections.items():
-            content = parsed[key].strip()
-            if content:
-                content = re.sub(r"(^|\n)([-•→]? ?)([\w\s]+?):", r"\1\2**\3:**", content)
-                content = "\n".join(
-                    f"• {line.strip()}" if line.strip() and not line.strip().startswith(("•", "-", "→")) else line
-                    for line in content.splitlines()
-                )
-                markdown += f"---\n\n### {title}\n\n{content.strip()}\n\n"
-
-        return markdown.strip()
-
-    except Exception as e:
-        logger.warning(f"[⚠️ Error al formatear análisis PRO]: {e}")
-        return "⚠️ Error al formatear análisis técnico. Intenta nuevamente."
-
-@app.post("/analyze")
-async def analyze_token(req: AnalysisRequest):
-    try:
-        token = req.token.upper().strip()
-        mode = req.mode.lower().strip()
-        message = req.message.strip().lower()
-
-        generic_inputs = {
-            "dame un análisis", "análisis", "análisis de hoy", "análisis técnico",
-            "análisis profundo", "qué opinas", "qué piensas", "qué ves",
-            "ver análisis", "análisis del mercado"
-        }
-
-        if not token or not message:
-            raise ValueError("Token y mensaje son obligatorios.")
-
-        if message in generic_inputs or message.strip() == "":
-            message = f"Realiza un análisis técnico y narrativo profesional del token {token.upper()}. Evalúa la situación actual, identifica niveles clave y proporciona una estrategia clara con entradas, salidas y riesgo."
-
-        market_data = get_market_data(token.lower())
-        price = market_data.get("price")
-
-        if not market_data or price is None or str(price).lower() in ["nan", "n/d", ""]:
-            raise ValueError(f"No se pudo obtener información válida del token '{token}'.")
-
-        if mode == "lite":
-            brain_context = compile_context(token)
-            prompt = format_prompt_lite.build_prompt(token, message, market_data, brain_context)
-
-        elif mode == "pro":
-            brain_context = compile_context(token)
-            prompt = format_prompt_pro.build_prompt(token, message, market_data, brain_context)
-
-        elif mode == "advisor":
-            prompt = format_prompt_assist.build_prompt(token, message, market_data)
-
-        else:
-            raise HTTPException(status_code=400, detail="Modo no válido.")
-
-        logger.info(f"[🧠 Prompt generado] [{mode.upper()}] {token}")
-        print("📤 PROMPT COMPLETO:\n", prompt)
-
-        response = await get_response_from_llm(prompt)
-        logger.info(f"[📨 Respuesta LLM recibida]")
-        print("[📨 RAW LLM RESPONSE]:", response)
-
-        if not is_valid_response(mode, response):
-            logger.warning(f"[❌ Respuesta inválida] Modo: {mode} | Token: {token}")
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": "error",
-                    "analysis": "❌ El modelo no devolvió contenido útil.",
-                    "token": token,
-                    "mode": mode,
-                    "prompt": prompt,
-                    "raw_response": response,
-                    "timestamp": datetime.now(pytz.timezone("Europe/Madrid")).isoformat()
-                }
-            )
-
-        if mode == "lite":
-            if "#SIGNAL_END" in response:
-                price_line = f"[PRICE]: ${float(price):.4f}  \n"
-                response = response.replace("#SIGNAL_END", price_line + "#SIGNAL_END")
-
-            signal_fields = extract_fields_from_signal(response)
-
-            log_lite_signal(
-                token=token,
-                price=float(price),
-                prompt=prompt,
-                response=response,
-                action=signal_fields.get("action", ""),
-                confidence=signal_fields.get("confidence", ""),
-                risk=signal_fields.get("risk", ""),
-                timeframe=signal_fields.get("timeframe", ""),
-                timestamp=datetime.now(pytz.timezone("Europe/Madrid")).isoformat()
-            )
-            logger.info("📝 Señal LITE registrada.")
-
-        elif mode == "pro":
-            log_pro_signal(token, float(price), prompt, response)
-            logger.info("📊 Señal PRO registrada.")
-
-        elif mode == "advisor":
-            log_advisor_interaction(token, message, response, prompt)
-            log_advisor_session(token, message, response)
-            logger.info("💬 Interacción ADVISOR registrada.")
-
-        if mode == "pro":
-            if "#ANALYSIS_START" in response and "#ANALYSIS_END" in response:
-                formatted_response = build_markdown_from_analysis(response)
-            else:
-                formatted_response = response
-
-            madrid = pytz.timezone("Europe/Madrid")
-            now = datetime.now(madrid)
-            time_str = now.strftime("%d/%m/%Y %H:%Mh %Z")
-            header = f"**💰 Precio actual: ${float(price):,.2f}**  \n_(Actualizado el {time_str})_\n\n"
-            formatted_response = header + formatted_response.strip()
-        else:
-            formatted_response = response
-
-        return {
-            "status": "ok",
-            "mode": mode,
-            "token": token,
-            "price": float(price),
-            "analysis": formatted_response,
-            "prompt": prompt,
-            "timestamp": datetime.now(pytz.timezone("Europe/Madrid")).isoformat()
-        }
-
-    except Exception as e:
-        logger.error(f"[❌ Error] {str(e)}")
-        return JSONResponse(
-            status_code=400 if isinstance(e, ValueError) else 500,
-            content={
-                "status": "error",
-                "message": "No se pudo completar el análisis.",
-                "details": str(e),
-                "analysis": "❌ Error interno. Intenta de nuevo más tarde."
-            }
+        df, used_ex, used_sym = fetch_ohlcv_with_fallback(
+            payload.exchange, payload.symbol, payload.timeframe,
+            limit=payload.limit, fallbacks=payload.fallbacks
         )
-
-@app.get("/logs/{mode}/{token}")
-def get_logs_by_token_mode(token: str, mode: str):
-    try:
-        filepath = Path(f"backend/logs/{mode.upper()}/{token.lower()}.csv")
-        if not filepath.exists():
-            return {"status": "ok", "signals": []}
-        
-        with open(filepath, newline='', encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-
-        return {"status": "ok", "signals": rows}
-
     except Exception as e:
-        logger.error(f"[❌ Error al leer logs]: {e}")
-        raise HTTPException(status_code=404, detail="No se pudieron cargar los logs.")
-
-@app.post("/evaluate_signal")
-def evaluate_signal(req: EvaluationRequest):
+        raise HTTPException(400, f"Error CCXT: {e}")
+    df = _normalize_ohlc(df)
+    win = int(payload.window or 120)
+    if len(df) > win: df = df.tail(win)
+    cfg = payload.config or {}
     try:
-        data = req.dict()
-        log_evaluated_signal(data)
-        return {"status": "ok", "message": "Evaluación guardada correctamente."}
+        feats = compute_features(df, cfg)
     except Exception as e:
-        logger.error(f"[❌ Error al guardar evaluación]: {e}")
-        raise HTTPException(status_code=500, detail="No se pudo guardar la evaluación.")
+        raise HTTPException(400, f"Fallo en compute_features: {e.__class__.__name__}: {e}")
+    return {"price":{"close":df['close'].tail(5).tolist(),"ts":df['ts'].tail(5).tolist()},
+            "indicators":feats,
+            "meta":{"window":win,"timeframe":payload.timeframe,"source":f"ccxt/{used_ex}:{used_sym}"}}
 
-@app.get("/evaluated_logs/{token}")
-def get_evaluated_logs(token: str):
+@app.post("/analyze/lite", response_model=LiteSignalOut)
+def analyze_lite(token: str, timeframe: str, features_summary: Dict[str, Any] | None = None, price: float | None = None):
+    payload = {"token": token, "timeframe": timeframe, "features_summary": features_summary or {}}
+    result = llm.analyze("LITE", payload)
+
+    out = LiteSignalOut(**result)
+    row = out.model_dump()
+    row["meta"] = {"source": "llm", "features_used": bool(features_summary)}
+
+    def _last_or_none(x):
+        try:
+            return float(x[-1]) if isinstance(x, (list, tuple)) and x else None
+        except Exception:
+            return None
+
+    # Extraer features relevantes si vinieron
+    atr_last = None
+    ema_f_last = None
+    ema_s_last = None
+    rsi_last  = None
     try:
-        filepath = Path(f"backend/logs/EVALUATED/{token.lower()}.csv")
-        if not filepath.exists():
-            return {"status": "ok", "signals": []}
-        
-        with open(filepath, newline='', encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
+        fs = features_summary or {}
+        if "atr_last" in fs:
+            atr_last = float(fs["atr_last"])
+        elif isinstance(fs.get("atr"), dict):
+            arr = fs["atr"].get("p14") or fs["atr"].get("values")
+            atr_last = _last_or_none(arr)
 
-        return {"status": "ok", "signals": rows}
+        if "ema_fast_last" in fs: ema_f_last = float(fs["ema_fast_last"])
+        if "ema_slow_last" in fs: ema_s_last = float(fs["ema_slow_last"])
+        if "rsi_last" in fs:      rsi_last  = float(fs["rsi_last"])
 
-    except Exception as e:
-        logger.error(f"[❌ Error al leer logs evaluados]: {e}")
-        raise HTTPException(status_code=500, detail="No se pudieron cargar los logs evaluados.")
+        if ema_f_last is None and isinstance(fs.get("ema"), dict):
+            ema_f_last = _last_or_none(fs["ema"].get("ema_fast") or fs["ema"].get("fast"))
+            ema_s_last = _last_or_none(fs["ema"].get("ema_slow") or fs["ema"].get("slow"))
 
-@app.delete("/reset/{mode}/{token}")
-def reset_logs(mode: str, token: str):
-    path = f"backend/logs/{mode.upper()}/{token.lower()}.csv"
-    if os.path.exists(path):
-        os.remove(path)
-        return {"status": "ok", "message": "Archivo borrado"}
-    return {"status": "error", "message": "Archivo no encontrado"}
+        if rsi_last is None and isinstance(fs.get("rsi"), dict):
+            rsi_last = _last_or_none(fs["rsi"].get("p14") or fs["rsi"].get("values"))
+    except Exception:
+        pass
+
+    try:
+        # Caso A: LLM ya da LONG/SHORT => TP/SL si hay ATR y price
+        if out.action in ("LONG", "SHORT"):
+            if price is not None and atr_last is not None:
+                tp, sl = _compute_tp_sl_by_atr(out.action, float(price), float(atr_last))
+                if tp is not None and sl is not None:
+                    row["tp"] = tp
+                    row["sl"] = sl
+                    out = LiteSignalOut(**row)
+        # Caso B: LLM dice ESPERAR => aplicamos regla técnica mínima si hay datos
+        elif out.action == "ESPERAR":
+            tech_action = None
+            if ema_f_last is not None and ema_s_last is not None and rsi_last is not None:
+                if ema_f_last > ema_s_last and rsi_last > 52:
+                    tech_action = "LONG"
+                elif ema_f_last < ema_s_last and rsi_last < 48:
+                    tech_action = "SHORT"
+
+            if tech_action is not None:
+                row["action"] = tech_action
+                # Confianza base por regla: 60; ajusta si quieres en función de distancia EMAs / RSI
+                base_conf = 60
+                try:
+                    slope_bonus = 0
+                    if ema_f_last is not None and ema_s_last is not None:
+                        slope_bonus = min(10, max(0, abs(ema_f_last - ema_s_last) / max(1, ema_s_last) * 1000))
+                    rsi_bonus = min(10, max(0, (rsi_last - 50))) if tech_action == "LONG" else min(10, max(0, (50 - rsi_last)))
+                    row["confidence"] = int(min(85, base_conf + slope_bonus * 0.5 + rsi_bonus * 0.5))
+                except Exception:
+                    row["confidence"] = base_conf
+
+                if price is not None and atr_last is not None:
+                    tp, sl = _compute_tp_sl_by_atr(tech_action, float(price), float(atr_last))
+                    if tp is not None and sl is not None:
+                        row["tp"] = tp
+                        row["sl"] = sl
+
+                out = LiteSignalOut(**row)
+    except Exception:
+        pass
+
+    _ = insert_lite(conn, out.model_dump())
+    return out
+
+def _ensure_pro_format(md: str, token: str, tf: str) -> str:
+    req = ["#CTXT","#TA","#PLAN","#INSIGHT","#PARAMS"]
+    if all(r in md for r in req): return md
+    return "\n".join([
+        f"#CTXT {token} {tf}",
+        "#TA (sin-proveer)",
+        "#PLAN (sin-proveer)",
+        "#INSIGHT " + (md.replace("\r"," ").replace("\n"," ").strip()[:1800] or "(vacío)"),
+        "#PARAMS rsi=14 ema_fast=21 ema_slow=50 macd=12/26/9 bb=20x2",
+    ])
+
+@app.post("/analyze/pro", response_model=ProAnalysisOut)
+def analyze_pro(token: str, timeframe: str, features_summary: Dict[str, Any] | None = None, price: float | None = None):
+    payload = {"token": token, "timeframe": timeframe, "features_summary": features_summary or {}}
+    md = str(llm.analyze("PRO", payload))
+    md = _ensure_pro_format(md, token, timeframe)
+    out = ProAnalysisOut(
+        ts=dt.datetime.utcnow().isoformat()+"Z",
+        token=token, timeframe=timeframe, price=price,
+        analysis_md=md, meta={"features_used": bool(features_summary)}
+    )
+    _ = insert_pro(conn, out.model_dump())
+    return out
+
+@app.get("/logs/lite")
+def logs_lite(token: str, timeframe: Optional[str] = None, limit: int = 50, offset: int = 0):
+    return {"items": page_lite(conn, token, timeframe, limit, offset), "limit": limit, "offset": offset}
+
+
+
+def _compute_tp_sl_by_atr(action: str, price: float, atr_last: float, k_tp: float = 1.5, k_sl: float = 1.0):
+    if price is None or atr_last is None:
+        return None, None
+    if action == "LONG":
+        tp = price + k_tp * atr_last
+        sl = price - k_sl * atr_last
+    elif action == "SHORT":
+        tp = price - k_tp * atr_last
+        sl = price + k_sl * atr_last
+    else:
+        return None, None
+    return float(round(tp, 2)), float(round(sl, 2))
+
+@app.get("/logs/pro")
+def logs_pro(token: str, timeframe: Optional[str] = None, limit: int = 50, offset: int = 0):
+    try:
+        # 1) intento con page_pro si existe
+        try:
+            return {"items": page_pro(conn, token, timeframe, limit, offset), "limit": limit, "offset": offset}
+        except Exception as e1:
+            # 2) bypass: query directa
+            q = ["SELECT id, ts, token, timeframe, price, analysis_md, meta_json FROM pro_analyses WHERE token = ?"]
+            args = [token]
+            if timeframe:
+                q.append("AND timeframe = ?")
+                args.append(timeframe)
+            q.append("ORDER BY ts DESC LIMIT ? OFFSET ?")
+            args.extend([int(limit), int(offset)])
+            sql = " ".join(q)
+            cur = conn.execute(sql, tuple(args))
+            rows = []
+            import json
+            for r in cur.fetchall():
+                try:
+                    meta = json.loads(r[6]) if r[6] else None
+                except Exception:
+                    meta = None
+                rows.append({
+                    "id": r[0], "ts": r[1], "token": r[2], "timeframe": r[3],
+                    "price": r[4], "analysis_md": r[5], "meta": meta,
+                })
+            return {"items": rows, "limit": limit, "offset": offset, "bypass": True, "note": str(e1)}
+    except Exception as e2:
+        # 3) debug: nunca 500; devuelvo 200 con mensaje de error
+        return {"items": [], "limit": limit, "offset": offset, "error": str(e2)}
+
+@app.post("/__migrate")
+def __migrate():
+    ensure_schema(conn)
+    return {"ok": True}
+
+
+
+
+
